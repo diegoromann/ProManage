@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ProManage</title>
+    <title>ProManage - Login</title>
     <style>
         * {
             margin: 0;
@@ -12,11 +12,287 @@
         }
 
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1em;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #764ba2;
+        }
+
+        .toggle-form {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+        }
+
+        .toggle-form a {
+            color: #667eea;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+
+        .error {
+            color: #e74c3c;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+
+        .success {
+            color: #27ae60;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+
+        .hidden {
+            display: none;
         }
     </style>
 </head>
 <body>
-    <h1>Hola ProManage</h1>
+    <div class="container">
+        <!-- Formulario de Login -->
+        <div id="loginForm">
+            <h1>🔐 ProManage Login</h1>
+            <div class="form-group">
+                <label for="loginEmail">Correo:</label>
+                <input type="email" id="loginEmail" placeholder="tu@email.com" required>
+            </div>
+            <div class="form-group">
+                <label for="loginPassword">Contraseña:</label>
+                <input type="password" id="loginPassword" placeholder="Tu contraseña" required>
+            </div>
+            <button onclick="login()">Ingresar</button>
+            <div id="loginError" class="error hidden"></div>
+            <div class="toggle-form">
+                ¿No tienes cuenta? <a onclick="toggleForms()">Regístrate aquí</a>
+            </div>
+        </div>
+
+        <!-- Formulario de Registro -->
+        <div id="registerForm" class="hidden">
+            <h1>📝 Crear Cuenta</h1>
+            <div class="form-group">
+                <label for="registerEmail">Correo:</label>
+                <input type="email" id="registerEmail" placeholder="tu@email.com" required>
+            </div>
+            <div class="form-group">
+                <label for="registerPassword">Contraseña:</label>
+                <input type="password" id="registerPassword" placeholder="Mínimo 6 caracteres" required>
+            </div>
+            <div class="form-group">
+                <label for="registerCode">Código de Usuario:</label>
+                <input type="text" id="registerCode" placeholder="Ej: USER123" required>
+            </div>
+            <div class="form-group">
+                <label for="registerType">Tipo de Usuario:</label>
+                <select id="registerType" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 5px; font-size: 1em;">
+                    <option value="user">Usuario Normal</option>
+                    <option value="manager">Gerente</option>
+                    <option value="admin">Admin</option>
+                </select>
+            </div>
+            <button onclick="register()">Registrarse</button>
+            <div id="registerError" class="error hidden"></div>
+            <div id="registerSuccess" class="success hidden"></div>
+            <div class="toggle-form">
+                ¿Ya tienes cuenta? <a onclick="toggleForms()">Inicia sesión</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Inicializar datos de ejemplo en localStorage
+        function initializeData() {
+            if (!localStorage.getItem('promanageUsers')) {
+                const defaultUsers = [
+                    {
+                        email: 'admin@promanage.com',
+                        password: 'admin123',
+                        code: 'ADM001',
+                        type: 'admin',
+                        name: 'Administrador'
+                    },
+                    {
+                        email: 'gerente@promanage.com',
+                        password: 'gerente123',
+                        code: 'GER001',
+                        type: 'manager',
+                        name: 'Juan Gerente'
+                    },
+                    {
+                        email: 'user@promanage.com',
+                        password: 'user123',
+                        code: 'USR001',
+                        type: 'user',
+                        name: 'Carlos Usuario'
+                    }
+                ];
+                localStorage.setItem('promanageUsers', JSON.stringify(defaultUsers));
+            }
+        }
+
+        initializeData();
+
+        function toggleForms() {
+            document.getElementById('loginForm').classList.toggle('hidden');
+            document.getElementById('registerForm').classList.toggle('hidden');
+            document.getElementById('loginError').classList.add('hidden');
+            document.getElementById('registerError').classList.add('hidden');
+            document.getElementById('registerSuccess').classList.add('hidden');
+        }
+
+        function login() {
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            const errorDiv = document.getElementById('loginError');
+
+            if (!email || !password) {
+                errorDiv.textContent = 'Por favor completa todos los campos';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+
+            const users = JSON.parse(localStorage.getItem('promanageUsers'));
+            const user = users.find(u => u.email === email && u.password === password);
+
+            if (user) {
+                localStorage.setItem('currentUser', JSON.stringify(user));
+                window.location.href = 'dashboard.html';
+            } else {
+                errorDiv.textContent = 'Correo o contraseña incorrectos';
+                errorDiv.classList.remove('hidden');
+            }
+        }
+
+        function register() {
+            const email = document.getElementById('registerEmail').value;
+            const password = document.getElementById('registerPassword').value;
+            const code = document.getElementById('registerCode').value;
+            const type = document.getElementById('registerType').value;
+            const errorDiv = document.getElementById('registerError');
+            const successDiv = document.getElementById('registerSuccess');
+
+            errorDiv.classList.add('hidden');
+            successDiv.classList.add('hidden');
+
+            if (!email || !password || !code) {
+                errorDiv.textContent = 'Por favor completa todos los campos';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+
+            if (password.length < 6) {
+                errorDiv.textContent = 'La contraseña debe tener mínimo 6 caracteres';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+
+            const users = JSON.parse(localStorage.getItem('promanageUsers'));
+            
+            if (users.find(u => u.email === email)) {
+                errorDiv.textContent = 'Este correo ya está registrado';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+
+            if (users.find(u => u.code === code)) {
+                errorDiv.textContent = 'Este código de usuario ya existe';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+
+            const newUser = {
+                email: email,
+                password: password,
+                code: code,
+                type: type,
+                name: email.split('@')[0]
+            };
+
+            users.push(newUser);
+            localStorage.setItem('promanageUsers', JSON.stringify(users));
+
+            successDiv.textContent = '✅ Cuenta creada exitosamente. Inicia sesión para continuar.';
+            successDiv.classList.remove('hidden');
+
+            // Limpiar formulario
+            document.getElementById('registerEmail').value = '';
+            document.getElementById('registerPassword').value = '';
+            document.getElementById('registerCode').value = '';
+
+            setTimeout(() => {
+                toggleForms();
+            }, 2000);
+        }
+
+        // Permitir Enter para enviar
+        document.addEventListener('keypress', function(event) {
+            if (event.key === 'Enter') {
+                if (!document.getElementById('loginForm').classList.contains('hidden')) {
+                    login();
+                } else {
+                    register();
+                }
+            }
+        });
+    </script>
 </body>
 </html>
