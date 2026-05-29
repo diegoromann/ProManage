@@ -4526,3 +4526,106 @@ function injectSystemHealth(){
 }
 setTimeout(injectSystemHealth,900); setInterval(()=>{ if(document.body.classList.contains('pm-dashboard-active')) injectSystemHealth(); },5000);
 })();
+
+/* === ProManage HOTFIX 2026-05-29: pantalla negra al ingresar a empresa en escritorio === */
+(function(){
+  'use strict';
+  function $(id){ return document.getElementById(id); }
+  function show(el, display){ if(el){ el.style.display = display || 'flex'; el.hidden = false; el.removeAttribute('aria-hidden'); } }
+  function hide(el){ if(el){ el.style.display = 'none'; el.hidden = false; } }
+  function forceDashboardState(){
+    var dash = $('dashboardWrapper');
+    var auth = $('authWrapper');
+    var picker = $('companyPickerWrapper');
+    hide(auth);
+    hide(picker);
+    show(dash, 'flex');
+    document.body.classList.add('pm-dashboard-active');
+    document.body.classList.remove('pm-auth-screen-active','pm-picker-active','pm-force-login-visible');
+    ['pmSplash','pmLoader'].forEach(function(id){
+      var el=$(id);
+      if(el){
+        el.classList.remove('pm-visible-lock');
+        el.classList.add('hidden','pm-finished');
+        el.style.opacity='0';
+        el.style.visibility='hidden';
+        el.style.pointerEvents='none';
+        el.style.display='none';
+      }
+    });
+    var sidebar=$('sidebar');
+    if(sidebar){ sidebar.style.display='flex'; }
+    var main=document.querySelector('#dashboardWrapper .main-content');
+    if(main){ main.style.display='block'; main.style.visibility='visible'; main.style.opacity='1'; }
+    try{ if(typeof renderDashboard === 'function') renderDashboard(); }catch(e){}
+    try{ if(typeof updateDashboard === 'function') updateDashboard(); }catch(e){}
+    try{ if(typeof renderMinimalCharts === 'function') setTimeout(renderMinimalCharts,120); }catch(e){}
+  }
+  function pickerState(){
+    var dash=$('dashboardWrapper'), auth=$('authWrapper'), picker=$('companyPickerWrapper');
+    hide(auth); hide(dash); show(picker,'flex');
+    document.body.classList.remove('pm-dashboard-active','pm-auth-screen-active');
+    document.body.classList.add('pm-picker-active');
+  }
+  function authState(){
+    var dash=$('dashboardWrapper'), auth=$('authWrapper'), picker=$('companyPickerWrapper');
+    hide(dash); hide(picker); show(auth,'flex');
+    document.body.classList.remove('pm-dashboard-active','pm-picker-active');
+    document.body.classList.add('pm-auth-screen-active');
+  }
+
+  var oldSelect = window.selectCompany;
+  window.selectCompany = function(companyId){
+    var result;
+    try{
+      if(typeof oldSelect === 'function') result = oldSelect.apply(this, arguments);
+      else {
+        try{ window.selectedCompanyId = companyId; }catch(e){}
+        try{ localStorage.setItem('pm_selectedCompanyId', companyId); }catch(e){}
+      }
+    }catch(err){
+      console.error('ProManage: error entrando a empresa, aplicando recuperación visual.', err);
+      try{ window.selectedCompanyId = companyId; localStorage.setItem('pm_selectedCompanyId', companyId); }catch(e){}
+    }
+    forceDashboardState();
+    setTimeout(forceDashboardState, 60);
+    setTimeout(forceDashboardState, 260);
+    setTimeout(function(){ try{ if(typeof switchSection === 'function') switchSection('dash'); }catch(e){} forceDashboardState(); }, 420);
+    return result;
+  };
+
+  var oldOpenPicker = window.openCompanyPicker;
+  window.openCompanyPicker = function(){
+    var r;
+    try{ if(typeof oldOpenPicker === 'function') r = oldOpenPicker.apply(this, arguments); }catch(e){ console.error(e); }
+    pickerState();
+    return r;
+  };
+
+  var oldShowAuth = window.showAuthWrapper;
+  window.showAuthWrapper = function(){
+    var r;
+    try{ if(typeof oldShowAuth === 'function') r = oldShowAuth.apply(this, arguments); }catch(e){ console.error(e); }
+    authState();
+    return r;
+  };
+
+  document.addEventListener('click', function(ev){
+    var btn = ev.target && ev.target.closest ? ev.target.closest('.company-item-btn') : null;
+    if(btn){ setTimeout(forceDashboardState, 120); setTimeout(forceDashboardState, 420); }
+  }, true);
+
+  var observerReady = function(){
+    var dash=$('dashboardWrapper');
+    if(!dash || !('MutationObserver' in window)) return;
+    new MutationObserver(function(){
+      var inline=(dash.style.display||'').replace(/\s/g,'').toLowerCase();
+      if(inline && inline !== 'none'){
+        document.body.classList.add('pm-dashboard-active');
+        document.body.classList.remove('pm-auth-screen-active','pm-picker-active');
+      }
+    }).observe(dash,{attributes:true, attributeFilter:['style','class']});
+  };
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', observerReady, {once:true});
+  else observerReady();
+})();

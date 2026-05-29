@@ -79,3 +79,47 @@ body{min-height:100dvh!important}
 @media (max-width:430px){body.pm-dashboard-active #sidebar.sidebar{max-height:46dvh!important}.pm-project-gallery-grid,#detailMediaGrid.pm-project-gallery-grid{grid-template-columns:1fr!important}.pm-assistant-mini{grid-template-columns:36px 1fr auto!important}.pm-assistant-copy strong{font-size:12px!important}.pm-assistant-copy small{font-size:10px!important}}
 /* Tarjetas opcionales de salud/respaldo agregadas por JS */
 .pm-system-health-floating{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:14px 0 20px}.pm-system-health-floating .pm-health-mini{border:1px solid var(--border);background:var(--bg-primary);border-radius:16px;padding:14px}.pm-system-health-floating span{display:block;color:var(--text-secondary);font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}.pm-system-health-floating strong{font-size:18px;color:var(--text-primary)}
+
+/* === ProManage HOTFIX 2026-05-29: evitar pantalla negra al entrar a empresa en escritorio === */
+body.pm-dashboard-active #dashboardWrapper.dashboard-container{
+  display:flex!important;
+  visibility:visible!important;
+  opacity:1!important;
+  min-height:100vh!important;
+}
+body.pm-dashboard-active #dashboardWrapper .main-content{
+  display:block!important;
+  visibility:visible!important;
+  opacity:1!important;
+}
+@media (min-width:1025px){
+  body.pm-dashboard-active #dashboardWrapper.dashboard-container{
+    flex-direction:row!important;
+    width:100%!important;
+  }
+  body.pm-dashboard-active #sidebar.sidebar{
+    display:flex!important;
+    visibility:visible!important;
+    opacity:1!important;
+    transform:none!important;
+    position:fixed!important;
+    top:0!important;
+    bottom:0!important;
+    left:0!important;
+    width:260px!important;
+    height:100vh!important;
+    z-index:1000!important;
+  }
+  body.pm-dashboard-active .main-content{
+    margin-left:260px!important;
+    width:calc(100% - 260px)!important;
+    min-height:100vh!important;
+  }
+}
+body.pm-dashboard-active #pmSplash,
+body.pm-dashboard-active #pmLoader{
+  display:none!important;
+  opacity:0!important;
+  visibility:hidden!important;
+  pointer-events:none!important;
+}
