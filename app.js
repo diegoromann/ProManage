@@ -4350,3 +4350,179 @@ if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded'
 setTimeout(hide,850);
 })();
 
+
+
+/* === ProManage FIX PACK 2026-05-28: móvil cómodo, splash normal, PWA, PDF con galería y Excel profesional === */
+(function(){
+'use strict';
+const START = Date.now();
+const MIN_SPLASH_MS = 1250;
+function $(id){ return document.getElementById(id); }
+function readJSON(key, fallback){ try{ const raw=localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; }catch(e){ return fallback; } }
+function writeJSON(key, value){ try{ localStorage.setItem(key, JSON.stringify(value)); return true; }catch(e){ console.warn('No se pudo guardar '+key, e); return false; } }
+function notify(message,type){ try{ if(typeof showToast==='function') showToast(message,type||'success'); else if(typeof premiumToast==='function') premiumToast(message); else console.log(message); }catch(e){ console.log(message); } }
+function safe(v){ return String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
+function money(v){ const n=Number(v||0); return new Intl.NumberFormat('es-GT',{style:'currency',currency:'GTQ',maximumFractionDigits:2}).format(n); }
+function bytes(n){ n=Number(n||0); if(!n) return '0 KB'; if(n<1024) return n+' B'; if(n<1024*1024) return (n/1024).toFixed(1)+' KB'; return (n/(1024*1024)).toFixed(2)+' MB'; }
+function allPMStorageBytes(){ return Object.keys(localStorage).filter(k=>k.startsWith('pm_')).reduce((a,k)=>a+String(localStorage.getItem(k)||'').length,0); }
+function projectList(){ try{ if(typeof projects!=='undefined' && Array.isArray(projects)) return projects; }catch(e){} if(Array.isArray(window.projects)) return window.projects; return readJSON('pm_projects',[]); }
+function financeList(){ try{ if(typeof finances!=='undefined' && Array.isArray(finances)) return finances; }catch(e){} if(Array.isArray(window.finances)) return window.finances; return readJSON('pm_finances',[]); }
+function clientList(){ try{ if(typeof clients!=='undefined' && Array.isArray(clients)) return clients; }catch(e){} if(Array.isArray(window.clients)) return window.clients; return readJSON('pm_clients',[]); }
+function inventoryList(){ try{ if(typeof inventory!=='undefined' && Array.isArray(inventory)) return inventory; }catch(e){} if(Array.isArray(window.inventory)) return window.inventory; return readJSON('pm_inventory',[]); }
+function currentCompanyId(){ try{ if(typeof selectedCompanyId!=='undefined' && selectedCompanyId) return selectedCompanyId; }catch(e){} return window.selectedCompanyId || localStorage.getItem('pm_selectedCompanyId') || ''; }
+function scope(rows){ const id=currentCompanyId(); return !id ? rows : rows.filter(r=>!r || !r.companyId || String(r.companyId)===String(id)); }
+function syncLayoutState(){
+  const dash=$('dashboardWrapper'), auth=$('authWrapper'), picker=$('companyPickerWrapper');
+  const dashInline=(dash?.style?.display || '').replace(/\s/g,'').toLowerCase();
+  const dashVisible=!!dash && dashInline!=='' && dashInline!=='none';
+  document.body.classList.toggle('pm-dashboard-active', dashVisible);
+  document.body.classList.toggle('pm-auth-screen-active', !dashVisible && !!auth && getComputedStyle(auth).display!=='none');
+  document.body.classList.toggle('pm-picker-active', !dashVisible && !!picker && getComputedStyle(picker).display!=='none');
+  if(!dashVisible){
+    $('sidebar')?.classList.remove('active');
+    $('pmSmartAssistantPanel')?.classList.remove('active');
+    const panel=document.querySelector('.pm-assistant-panel'); if(panel) panel.classList.remove('active');
+  }
+}
+function keepSplashVisible(){
+  const splash=$('pmSplash');
+  const loader=$('pmLoader');
+  if(loader) loader.style.display='none';
+  if(!splash) return;
+  splash.classList.add('pm-visible-lock');
+  splash.classList.remove('hidden','pm-finished');
+  splash.style.display='flex';
+}
+function finishSplash(){
+  const splash=$('pmSplash'); if(!splash) return;
+  const elapsed=Date.now()-START;
+  const delay=Math.max(0, MIN_SPLASH_MS-elapsed);
+  setTimeout(()=>{
+    splash.classList.remove('pm-visible-lock');
+    splash.classList.add('pm-finished','hidden');
+    splash.style.pointerEvents='none';
+    setTimeout(()=>{ splash.style.display='none'; }, 380);
+  }, delay);
+}
+keepSplashVisible();
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',()=>{ syncLayoutState(); keepSplashVisible(); finishSplash(); },{once:true});
+else { syncLayoutState(); finishSplash(); }
+window.addEventListener('load',()=>{ syncLayoutState(); finishSplash(); },{once:true});
+setInterval(syncLayoutState, 700);
+['click','input','change'].forEach(evt=>document.addEventListener(evt,()=>setTimeout(syncLayoutState,60),true));
+const oldSwitch=window.switchSection;
+if(typeof oldSwitch==='function') window.switchSection=function(section){ const r=oldSwitch.apply(this,arguments); setTimeout(syncLayoutState,80); if(innerWidth<=1024) window.scrollTo({top:0,behavior:'smooth'}); return r; };
+
+function installManifest(){
+  try{
+    if(document.querySelector('link[rel="manifest"]')) return;
+    const manifest={name:'ProManage',short_name:'ProManage',start_url:'./index.html',display:'standalone',background_color:'#0f172a',theme_color:'#6366f1',description:'Gestión local de proyectos, finanzas, inventario y reportes.',icons:[{src:'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"%3E%3Crect width="512" height="512" rx="112" fill="%230f172a"/%3E%3Cpath d="M126 322V150h155c67 0 109 34 109 88s-42 87-109 87h-69v37h-86Zm86-105h63c18 0 29-9 29-23s-11-23-29-23h-63v46Z" fill="%236366f1"/%3E%3Cpath d="M126 385h260v-55H126v55Z" fill="%2306b6d4"/%3E%3C/svg%3E',sizes:'512x512',type:'image/svg+xml'}]};
+    const link=document.createElement('link'); link.rel='manifest'; link.href='data:application/manifest+json,'+encodeURIComponent(JSON.stringify(manifest)); document.head.appendChild(link);
+  }catch(e){}
+}
+installManifest();
+let deferredInstallPrompt=null;
+window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); deferredInstallPrompt=e; });
+window.installProManageApp=async function(){
+  if(deferredInstallPrompt){ deferredInstallPrompt.prompt(); await deferredInstallPrompt.userChoice.catch(()=>{}); deferredInstallPrompt=null; }
+  else alert('Para instalar en iPhone: toca Compartir y luego “Agregar a pantalla de inicio”. En Android: menú del navegador > Instalar app.');
+};
+
+function normalizeImageRecord(raw, projectId, index){
+  if(!raw) return null;
+  const dataUrl=raw.dataUrl || raw.url || raw.src || raw.base64 || raw.image || raw.content || '';
+  if(!String(dataUrl).startsWith('data:image')) return null;
+  return { id: raw.id || ('img_'+index), projectId, name: raw.name || raw.filename || raw.title || ('Imagen '+(index+1)), type: raw.type || 'image/jpeg', size: raw.size || Math.round((String(dataUrl).split(',')[1]||'').length*.75), dataUrl, createdAt: raw.createdAt || raw.date || raw.uploadedAt || '' };
+}
+function collectProjectImages(project){
+  const projectId=String(project?.id||'').trim();
+  const out=[]; const seen=new Set();
+  function addList(list){ if(!Array.isArray(list)) return; list.forEach((x,i)=>{ const img=normalizeImageRecord(x,projectId,out.length+i); if(img && !seen.has(img.dataUrl)){ seen.add(img.dataUrl); out.push(img); } }); }
+  try{ if(typeof window.getProjectImages==='function') addList(window.getProjectImages(projectId)); }catch(e){}
+  const stores=['pm_projectImages','pm_project_images','pm_projectsImages','pm_gallery','pm_media','pm_attachments'];
+  stores.forEach(key=>{
+    const data=readJSON(key, null);
+    if(!data) return;
+    if(Array.isArray(data)) addList(data.filter(x=>String(x?.projectId||x?.project||x?.parentId||'')===projectId));
+    else if(Array.isArray(data[projectId])) addList(data[projectId]);
+  });
+  ['images','gallery','media','attachments','files','evidence','evidences'].forEach(k=>addList(project?.[k]));
+  return out;
+}
+function findProject(raw){
+  const value=String(raw||'').trim(); const all=projectList(); if(!value) return null;
+  let p=all.find(x=>String(x?.id||'').trim()===value); if(p) return p;
+  const lower=value.toLowerCase();
+  p=all.find(x=>String(x?.id||'').trim().toLowerCase()===lower || String(x?.title||x?.name||'').trim().toLowerCase()===lower); if(p) return p;
+  const opt=$('reportProjectSelect')?.selectedOptions?.[0]; const oid=opt?.dataset?.projectId || opt?.getAttribute('data-project-id');
+  return oid ? all.find(x=>String(x?.id||'').trim()===String(oid).trim()) || null : null;
+}
+function projectReportHTML(project){
+  const images=collectProjectImages(project); const now=new Date();
+  const title=project?.title || project?.name || 'Proyecto';
+  const desc=project?.description || project?.desc || project?.details || 'Sin descripción registrada.';
+  const status=project?.status || project?.estado || 'No definido'; const priority=project?.priority || project?.prioridad || 'No definida';
+  const progress=project?.progress ?? project?.avance ?? project?.percent ?? '';
+  const gallery=images.length?`<div class="gallery-grid">${images.map((img,i)=>`<figure><img src="${img.dataUrl}" alt="${safe(img.name)}"><figcaption><strong>${safe(img.name||('Imagen '+(i+1)))}</strong><span>${safe([img.createdAt?new Date(img.createdAt).toLocaleDateString('es-GT'):'', img.size?bytes(img.size):''].filter(Boolean).join(' · '))}</span></figcaption></figure>`).join('')}</div>`:`<div class="empty">Este proyecto aún no tiene imágenes guardadas en su galería.</div>`;
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Reporte ${safe(title)}</title><style>@page{size:A4;margin:13mm}*{box-sizing:border-box}body{margin:0;color:#111827;background:white;font-family:Inter,Arial,sans-serif;font-size:13px;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact}.cover{padding:26px 0 24px;border-bottom:4px solid #111827;margin-bottom:24px}.eyebrow{font-size:10px;text-transform:uppercase;letter-spacing:2px;font-weight:900;color:#6366f1;margin:0 0 9px}h1{font-size:34px;line-height:1.05;margin:0 0 9px;letter-spacing:-1px}.subtitle{color:#4b5563;margin:0}.meta{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:22px 0}.card{border:1px solid #d1d5db;border-radius:12px;padding:12px;background:#f8fafc}.card span{display:block;color:#6b7280;font-size:10px;text-transform:uppercase;font-weight:900;letter-spacing:.5px}.card strong{display:block;margin-top:4px;font-size:14px}.section{margin:24px 0;break-inside:avoid}.desc{border-left:4px solid #111827;background:#f8fafc;border-radius:0 12px 12px 0;padding:16px;white-space:pre-wrap}.gallery-head{display:flex;justify-content:space-between;align-items:end;border-bottom:1px solid #e5e7eb;margin:28px 0 16px;padding-bottom:10px}.gallery-head h2{margin:0;font-size:18px}.gallery-head span{color:#6b7280}.gallery-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}.gallery-grid figure{margin:0;border:1px solid #d1d5db;border-radius:14px;padding:10px;break-inside:avoid;background:white}.gallery-grid img{width:100%;height:210px;object-fit:cover;border-radius:9px;border:1px solid #e5e7eb;display:block}.gallery-grid figcaption{margin-top:8px;font-size:11px;color:#4b5563;word-break:break-word}.gallery-grid figcaption strong{display:block;color:#111827;font-size:12px}.gallery-grid figcaption span{color:#6b7280}.empty{border:1px dashed #cbd5e1;border-radius:14px;background:#f8fafc;color:#64748b;padding:18px}.footer{margin-top:26px;border-top:1px solid #e5e7eb;padding-top:10px;color:#6b7280;font-size:11px}@media print{.gallery-grid figure{page-break-inside:avoid;break-inside:avoid}}</style></head><body><main><header class="cover"><p class="eyebrow">Reporte profesional de proyecto</p><h1>${safe(title)}</h1><p class="subtitle">Generado el ${now.toLocaleDateString('es-GT')} a las ${now.toLocaleTimeString('es-GT')}</p></header><section class="meta"><div class="card"><span>ID</span><strong>${safe(project?.id||'No disponible')}</strong></div><div class="card"><span>Estado</span><strong>${safe(status)}</strong></div><div class="card"><span>Prioridad</span><strong>${safe(priority)}</strong></div><div class="card"><span>Avance</span><strong>${progress!==''?safe(progress)+'%':'No registrado'}</strong></div></section><section class="section"><h2>Información del proyecto</h2><div class="desc">${safe(desc)}</div></section><section><div class="gallery-head"><h2>Galería del proyecto</h2><span>${images.length} imagen${images.length===1?'':'es'}</span></div>${gallery}</section><footer class="footer">Documento generado localmente por ProManage. Solo contiene datos del proyecto seleccionado y su galería asociada.</footer></main></body></html>`;
+}
+function printHTML(html){ return new Promise((resolve,reject)=>{ try{ const old=$('pm-project-pdf-frame-v2'); if(old) old.remove(); const frame=document.createElement('iframe'); frame.id='pm-project-pdf-frame-v2'; frame.style.cssText='position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none'; document.body.appendChild(frame); const doc=frame.contentDocument||frame.contentWindow.document; doc.open(); doc.write(html); doc.close(); const run=()=>{ const imgs=[...doc.images]; Promise.race([Promise.all(imgs.map(img=>new Promise(r=>{ if(img.complete) r(); else{ img.onload=r; img.onerror=r; }}))), new Promise(r=>setTimeout(r,2500))]).then(()=>{ frame.contentWindow.focus(); frame.contentWindow.print(); setTimeout(()=>frame.remove(),6000); resolve(); }); }; if(doc.readyState==='complete') setTimeout(run,250); else frame.onload=()=>setTimeout(run,250); }catch(e){ reject(e); } }); }
+window.generateSingleProjectPDF=function(){
+  try{
+    if(typeof window.pmRefreshReportProjects==='function') try{ window.pmRefreshReportProjects(); }catch(e){}
+    const select=$('reportProjectSelect'); const value=select?.value || select?.selectedOptions?.[0]?.dataset?.projectId || '';
+    if(!value){ alert('Selecciona un proyecto'); return; }
+    const project=findProject(value); if(!project){ alert('No se pudo encontrar ese proyecto. Vuelve a seleccionarlo en Reportes.'); return; }
+    printHTML(projectReportHTML(project)).then(()=>notify('PDF preparado con la galería real del proyecto.','success')).catch(err=>{ console.error(err); alert('No se pudo preparar el PDF con imágenes.'); });
+  }catch(err){ console.error(err); alert('No se pudo generar el PDF del proyecto.'); }
+};
+
+function aoaSheet(rows){ return XLSX.utils.aoa_to_sheet(rows); }
+function setWidths(ws, widths){ ws['!cols']=widths.map(w=>({wch:w})); }
+function addAutoFilter(ws, range){ ws['!autofilter']={ref:range}; }
+function professionalFinanceWorkbook(){
+  const wb=XLSX.utils.book_new(); const finances=scope(financeList()); const projects=scope(projectList()); const inventory=scope(inventoryList()); const clients=scope(clientList());
+  const income=finances.filter(f=>String(f.type||'').toLowerCase().includes('ingreso')).reduce((a,f)=>a+Number(f.amount||0),0);
+  const expenses=finances.filter(f=>!String(f.type||'').toLowerCase().includes('ingreso')).reduce((a,f)=>a+Number(f.amount||0),0);
+  const balance=income-expenses; const now=new Date();
+  const resumen=aoaSheet([
+    ['ProManage - Reporte Financiero Profesional'],
+    ['Generado', now.toLocaleString('es-GT')],
+    [],
+    ['Indicador','Valor'],
+    ['Ingresos', income],
+    ['Egresos', expenses],
+    ['Balance', balance],
+    ['Proyectos registrados', projects.length],
+    ['Clientes registrados', clients.length],
+    ['Productos en inventario', inventory.length],
+    ['Registros financieros', finances.length],
+    ['Almacenamiento local usado', bytes(allPMStorageBytes())]
+  ]); setWidths(resumen,[32,22]); XLSX.utils.book_append_sheet(wb,resumen,'Resumen Ejecutivo');
+  const finRows=[['Tipo','Categoría','Monto','Fecha','Empresa','ID']].concat(finances.map(f=>[f.type||'',f.category||f.categoria||'',Number(f.amount||0),f.date||f.fecha||'',f.companyId||'',f.id||'']));
+  const fin=aoaSheet(finRows); setWidths(fin,[14,26,16,18,22,24]); addAutoFilter(fin,'A1:F'+Math.max(1,finRows.length)); XLSX.utils.book_append_sheet(wb,fin,'Finanzas');
+  const byCat={}; finances.forEach(f=>{ const cat=f.category||f.categoria||'Sin categoría'; if(!byCat[cat]) byCat[cat]={ingresos:0,egresos:0,balance:0}; const amt=Number(f.amount||0); if(String(f.type||'').toLowerCase().includes('ingreso')) byCat[cat].ingresos+=amt; else byCat[cat].egresos+=amt; byCat[cat].balance=byCat[cat].ingresos-byCat[cat].egresos; });
+  const catRows=[['Categoría','Ingresos','Egresos','Balance']].concat(Object.entries(byCat).map(([k,v])=>[k,v.ingresos,v.egresos,v.balance])); const cat=aoaSheet(catRows); setWidths(cat,[30,16,16,16]); addAutoFilter(cat,'A1:D'+Math.max(1,catRows.length)); XLSX.utils.book_append_sheet(wb,cat,'Resumen por Categoría');
+  const proRows=[['Proyecto','Estado','Prioridad','Avance','Empresa','ID']].concat(projects.map(p=>[p.title||p.name||'',p.status||p.estado||'',p.priority||p.prioridad||'',p.progress??p.avance??'',p.companyId||'',p.id||''])); const pro=aoaSheet(proRows); setWidths(pro,[34,18,18,12,22,24]); addAutoFilter(pro,'A1:F'+Math.max(1,proRows.length)); XLSX.utils.book_append_sheet(wb,pro,'Proyectos');
+  const invRows=[['Item','Cantidad','Unidad','Costo','Estado','ID']].concat(inventory.map(i=>[i.name||i.item||i.product||'',i.quantity??i.qty??'',i.unit||'',i.cost??i.price??'',i.status||'',i.id||''])); const inv=aoaSheet(invRows); setWidths(inv,[32,14,14,16,18,24]); addAutoFilter(inv,'A1:F'+Math.max(1,invRows.length)); XLSX.utils.book_append_sheet(wb,inv,'Inventario');
+  wb.Props={Title:'ProManage Reporte Financiero',Subject:'Exportación profesional',Author:'ProManage',CreatedDate:new Date()};
+  return wb;
+}
+window.exportProjectsExcel=function(){
+  if(typeof XLSX==='undefined'){ alert('El exportador Excel aún está cargando. Intenta de nuevo en unos segundos.'); return; }
+  const stamp=new Date().toISOString().slice(0,10);
+  XLSX.writeFile(professionalFinanceWorkbook(), 'ProManage_Reporte_Profesional_'+stamp+'.xlsx');
+  notify('Excel profesional exportado correctamente.','success');
+};
+window.exportProfessionalFinanceExcel=window.exportProjectsExcel;
+
+window.exportFullBackupJSON = window.exportFullBackupJSON || function(){ const payload={exportedAt:new Date().toISOString(),version:'ProManage Backup',data:{}}; Object.keys(localStorage).filter(k=>k.startsWith('pm_')).forEach(k=>payload.data[k]=localStorage.getItem(k)); const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='ProManage_Backup_'+new Date().toISOString().slice(0,10)+'.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); notify('Backup exportado.','success'); };
+function injectSystemHealth(){
+  const dash=$('section-dash') || document.querySelector('.section.active'); if(!dash || $('pmSystemHealthMini')) return;
+  const holder=document.createElement('div'); holder.id='pmSystemHealthMini'; holder.className='pm-system-health-floating';
+  const finances=scope(financeList()); const ingresos=finances.filter(f=>String(f.type||'').toLowerCase().includes('ingreso')).reduce((a,f)=>a+Number(f.amount||0),0); const egresos=finances.filter(f=>!String(f.type||'').toLowerCase().includes('ingreso')).reduce((a,f)=>a+Number(f.amount||0),0);
+  holder.innerHTML=`<div class="pm-health-mini"><span>Estado local</span><strong>${bytes(allPMStorageBytes())}</strong></div><div class="pm-health-mini"><span>Balance</span><strong>${money(ingresos-egresos)}</strong></div><div class="pm-health-mini"><span>Proyectos</span><strong>${scope(projectList()).length}</strong></div><div class="pm-health-mini"><span>Respaldo</span><strong>${readJSON('pm_auto_backup',null)?.day||'Recomendado'}</strong></div>`;
+  const first=dash.querySelector('.stats-grid,.panel,.pm-kpis'); dash.insertBefore(holder, first || dash.firstChild);
+}
+setTimeout(injectSystemHealth,900); setInterval(()=>{ if(document.body.classList.contains('pm-dashboard-active')) injectSystemHealth(); },5000);
+})();
