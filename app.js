@@ -4527,105 +4527,116 @@ function injectSystemHealth(){
 setTimeout(injectSystemHealth,900); setInterval(()=>{ if(document.body.classList.contains('pm-dashboard-active')) injectSystemHealth(); },5000);
 })();
 
-/* === ProManage HOTFIX 2026-05-29: pantalla negra al ingresar a empresa en escritorio === */
+/* =========================================================
+   ProManage OS - Premium Mission Upgrade JS
+   Capa no destructiva encima de los módulos existentes.
+   ========================================================= */
 (function(){
-  'use strict';
-  function $(id){ return document.getElementById(id); }
-  function show(el, display){ if(el){ el.style.display = display || 'flex'; el.hidden = false; el.removeAttribute('aria-hidden'); } }
-  function hide(el){ if(el){ el.style.display = 'none'; el.hidden = false; } }
-  function forceDashboardState(){
-    var dash = $('dashboardWrapper');
-    var auth = $('authWrapper');
-    var picker = $('companyPickerWrapper');
-    hide(auth);
-    hide(picker);
-    show(dash, 'flex');
-    document.body.classList.add('pm-dashboard-active');
-    document.body.classList.remove('pm-auth-screen-active','pm-picker-active','pm-force-login-visible');
-    ['pmSplash','pmLoader'].forEach(function(id){
-      var el=$(id);
-      if(el){
-        el.classList.remove('pm-visible-lock');
-        el.classList.add('hidden','pm-finished');
-        el.style.opacity='0';
-        el.style.visibility='hidden';
-        el.style.pointerEvents='none';
-        el.style.display='none';
-      }
-    });
-    var sidebar=$('sidebar');
-    if(sidebar){ sidebar.style.display='flex'; }
-    var main=document.querySelector('#dashboardWrapper .main-content');
-    if(main){ main.style.display='block'; main.style.visibility='visible'; main.style.opacity='1'; }
-    try{ if(typeof renderDashboard === 'function') renderDashboard(); }catch(e){}
-    try{ if(typeof updateDashboard === 'function') updateDashboard(); }catch(e){}
-    try{ if(typeof renderMinimalCharts === 'function') setTimeout(renderMinimalCharts,120); }catch(e){}
-  }
-  function pickerState(){
-    var dash=$('dashboardWrapper'), auth=$('authWrapper'), picker=$('companyPickerWrapper');
-    hide(auth); hide(dash); show(picker,'flex');
-    document.body.classList.remove('pm-dashboard-active','pm-auth-screen-active');
-    document.body.classList.add('pm-picker-active');
-  }
-  function authState(){
-    var dash=$('dashboardWrapper'), auth=$('authWrapper'), picker=$('companyPickerWrapper');
-    hide(dash); hide(picker); show(auth,'flex');
-    document.body.classList.remove('pm-dashboard-active','pm-picker-active');
-    document.body.classList.add('pm-auth-screen-active');
-  }
-
-  var oldSelect = window.selectCompany;
-  window.selectCompany = function(companyId){
-    var result;
-    try{
-      if(typeof oldSelect === 'function') result = oldSelect.apply(this, arguments);
-      else {
-        try{ window.selectedCompanyId = companyId; }catch(e){}
-        try{ localStorage.setItem('pm_selectedCompanyId', companyId); }catch(e){}
-      }
-    }catch(err){
-      console.error('ProManage: error entrando a empresa, aplicando recuperación visual.', err);
-      try{ window.selectedCompanyId = companyId; localStorage.setItem('pm_selectedCompanyId', companyId); }catch(e){}
-    }
-    forceDashboardState();
-    setTimeout(forceDashboardState, 60);
-    setTimeout(forceDashboardState, 260);
-    setTimeout(function(){ try{ if(typeof switchSection === 'function') switchSection('dash'); }catch(e){} forceDashboardState(); }, 420);
-    return result;
-  };
-
-  var oldOpenPicker = window.openCompanyPicker;
-  window.openCompanyPicker = function(){
-    var r;
-    try{ if(typeof oldOpenPicker === 'function') r = oldOpenPicker.apply(this, arguments); }catch(e){ console.error(e); }
-    pickerState();
-    return r;
-  };
-
-  var oldShowAuth = window.showAuthWrapper;
-  window.showAuthWrapper = function(){
-    var r;
-    try{ if(typeof oldShowAuth === 'function') r = oldShowAuth.apply(this, arguments); }catch(e){ console.error(e); }
-    authState();
-    return r;
-  };
-
-  document.addEventListener('click', function(ev){
-    var btn = ev.target && ev.target.closest ? ev.target.closest('.company-item-btn') : null;
-    if(btn){ setTimeout(forceDashboardState, 120); setTimeout(forceDashboardState, 420); }
-  }, true);
-
-  var observerReady = function(){
-    var dash=$('dashboardWrapper');
-    if(!dash || !('MutationObserver' in window)) return;
-    new MutationObserver(function(){
-      var inline=(dash.style.display||'').replace(/\s/g,'').toLowerCase();
-      if(inline && inline !== 'none'){
-        document.body.classList.add('pm-dashboard-active');
-        document.body.classList.remove('pm-auth-screen-active','pm-picker-active');
-      }
-    }).observe(dash,{attributes:true, attributeFilter:['style','class']});
-  };
-  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', observerReady, {once:true});
-  else observerReady();
+'use strict';
+if(window.__PM_OS_MISSION_UPGRADE__) return;
+window.__PM_OS_MISSION_UPGRADE__ = true;
+const $ = (id)=>document.getElementById(id);
+const q = (sel,root=document)=>root.querySelector(sel);
+const qa = (sel,root=document)=>Array.from(root.querySelectorAll(sel));
+const norm = (v)=>String(v ?? '').trim();
+const safe = (v)=>String(v ?? '').replace(/[&<>'"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[m]));
+const read = (key,fb)=>{try{const v=localStorage.getItem(key);return v?JSON.parse(v):fb}catch(e){return fb}};
+const write = (key,val)=>{try{localStorage.setItem(key,JSON.stringify(val));return true}catch(e){console.warn(e);return false}};
+const rows = (key)=>Array.isArray(read(key,[]))?read(key,[]):[];
+const companyId = ()=> localStorage.getItem('pm_selectedCompanyId') || window.selectedCompanyId || '';
+const scope = (arr)=>{const cid=companyId();return cid?arr.filter(x=>!x.companyId || String(x.companyId)===String(cid)):arr};
+const projects = ()=>scope(rows('pm_projects'));
+const finances = ()=>scope(rows('pm_finances'));
+const inventory = ()=>scope(rows('pm_inventory'));
+const clients = ()=>scope(rows('pm_clients'));
+const money = (n)=>'Q'+Number(n||0).toLocaleString('es-GT',{minimumFractionDigits:2,maximumFractionDigits:2});
+const pct = (n)=>Math.max(0,Math.min(100,Math.round(Number(n)||0)));
+function toast(msg,type='success'){ try{ if(typeof window.showToast==='function') return window.showToast(msg,type); }catch(e){} const t=document.createElement('div');t.className='toast-item toast-'+(type==='error'?'error':'success');t.textContent=msg;(($('toast-container')||$('pmToastWrap')||document.body).appendChild(t));setTimeout(()=>t.remove(),3300); }
+function getImages(project){
+  const id=String(project?.id||''); const out=[]; const seen=new Set();
+  const add=(x,i)=>{ if(!x) return; const data=x.dataUrl||x.url||x.src||x.base64||x.image||x.content||''; if(!String(data).startsWith('data:image')||seen.has(data)) return; seen.add(data); out.push({dataUrl:data,name:x.name||x.filename||x.title||'Imagen '+(out.length+1),date:x.createdAt||x.date||x.uploadedAt||'',size:x.size||0}); };
+  ['images','gallery','media','attachments','files','evidence','evidences'].forEach(k=>Array.isArray(project?.[k])&&project[k].forEach(add));
+  ['pm_projectImages','pm_project_images','pm_projectsImages','pm_gallery','pm_media','pm_attachments'].forEach(key=>{const d=read(key,null); if(!d) return; if(Array.isArray(d)) d.filter(x=>String(x?.projectId||x?.project||x?.parentId||'')===id).forEach(add); else if(Array.isArray(d[id])) d[id].forEach(add);});
+  try{ if(typeof window.getProjectImages==='function') (window.getProjectImages(id)||[]).forEach(add); }catch(e){}
+  return out;
+}
+function projectProgress(p){
+  const explicit=Number(p.progress ?? p.avance ?? p.percent ?? NaN); if(Number.isFinite(explicit)) return pct(explicit);
+  const s=norm(p.status||p.estado).toLowerCase(); if(s.includes('complet')||s.includes('final')) return 100; if(s.includes('proceso')||s.includes('activo')) return 55; if(s.includes('pausa')) return 35; return 15;
+}
+function financeTotals(){let income=0,expense=0; finances().forEach(f=>{const amt=Number(f.amount||f.monto||0); if(norm(f.type||f.tipo).toLowerCase().includes('ingreso')) income+=amt; else expense+=amt;});return{income,expense,balance:income-expense};}
+function riskOfProject(p){
+  let score=0; const reasons=[]; const progress=projectProgress(p); const imgs=getImages(p).length; const s=norm(p.status||p.estado).toLowerCase(); const pr=norm(p.priority||p.prioridad).toLowerCase();
+  if(progress<35){score+=24;reasons.push('avance bajo')} if(!imgs){score+=18;reasons.push('sin evidencias')} if(pr.includes('alta')){score+=16;reasons.push('prioridad alta')} if(s.includes('pend')){score+=14;reasons.push('pendiente')} if(s.includes('pausa')){score+=12;reasons.push('en pausa')}
+  const level=score>=48?'Alto':score>=26?'Medio':'Bajo'; return{score,level,reasons,progress,imgs,className:score>=48?'danger':score>=26?'warn':''};
+}
+function enterpriseScore(){ const ps=projects(); const ft=financeTotals(); const completed=ps.filter(p=>projectProgress(p)>=100).length; const avg=ps.length?ps.reduce((a,p)=>a+projectProgress(p),0)/ps.length:72; const riskPenalty=ps.map(riskOfProject).filter(r=>r.level==='Alto').length*7; const financeHealth=ft.income?Math.max(20,Math.min(100,60+(ft.balance/Math.max(ft.income,1))*40)):(ft.expense?35:70); return pct(avg*.38+financeHealth*.34+(ps.length?completed/ps.length*100:70)*.18+10-riskPenalty); }
+function setMobileState(){ const mobile=innerWidth<=900; document.body.classList.toggle('pm-os-mobile',mobile); const dash=$('dashboardWrapper'); const active=dash && getComputedStyle(dash).display!=='none'; document.body.classList.toggle('pm-dashboard-active',!!active); if(!mobile) document.body.classList.remove('pm-mobile-sidebar-open'); }
+function toggleMobileSidebar(force){ const open=typeof force==='boolean'?force:!document.body.classList.contains('pm-mobile-sidebar-open'); document.body.classList.toggle('pm-mobile-sidebar-open',open); $('sidebar')?.classList.toggle('active',open); }
+function installMobileShell(){
+  if(!$('pmOsMobileToggle')){ const b=document.createElement('button'); b.id='pmOsMobileToggle'; b.className='pm-os-mobile-toggle'; b.type='button'; b.setAttribute('aria-label','Abrir menú de ProManage'); b.innerHTML='☰'; b.addEventListener('click',()=>toggleMobileSidebar()); document.body.appendChild(b); }
+  if(!$('pmOsMobileBackdrop')){ const bg=document.createElement('div'); bg.id='pmOsMobileBackdrop'; bg.className='pm-os-mobile-backdrop'; bg.addEventListener('click',()=>toggleMobileSidebar(false)); document.body.appendChild(bg); }
+  qa('.menu-item').forEach(item=>item.addEventListener('click',()=>{ if(innerWidth<=900) setTimeout(()=>toggleMobileSidebar(false),120); },{passive:true}));
+}
+function enhanceLogin(){ const wrap=$('authWrapper'); if(!wrap || $('pmOsLoginShowcase')) return; const panel=document.createElement('section'); panel.id='pmOsLoginShowcase'; panel.className='pm-os-login-showcase'; panel.innerHTML=`<div><p class="pm-os-eyebrow">ProManage OS Upgrade</p><h2>Control total para proyectos reales.</h2><p>Dashboard ejecutivo, finanzas, evidencias, reportes, inventario y asistencia local en una experiencia premium optimizada para móvil.</p></div><div class="pm-os-metric-grid"><div class="pm-os-metric"><span>Health Score</span><strong>98/100</strong><small>Control empresarial</small></div><div class="pm-os-metric"><span>Modo móvil</span><strong>Listo</strong><small>Menú desplegable</small></div><div class="pm-os-metric"><span>Reportes</span><strong>PDF</strong><small>Con galería</small></div><div class="pm-os-metric"><span>Storage</span><strong>Local</strong><small>Sin backend</small></div></div>`; wrap.insertBefore(panel,wrap.firstChild); }
+function enhanceSidebar(){ const icons={dash:'⌂',intelligence:'✦',projects:'▦',team:'◎',employees:'☷',clients:'◉',finances:'Q',inventory:'▣',reports:'☰',os:'◆'}; qa('.menu-item').forEach(item=>{ if(item.querySelector('.pm-menu-icon')) return; const id=(item.id||'').replace('menu-',''); const text=item.textContent.trim(); item.textContent=''; const icon=document.createElement('span'); icon.className='pm-menu-icon'; icon.textContent=icons[id]||'•'; const label=document.createElement('span'); label.textContent=text; item.append(icon,label); }); }
+function injectOSSection(){
+  const main=q('.main-content'); if(!main || $('section-os')) return;
+  const nav=q('.sidebar-menu'); if(nav && !$('menu-os')){ const a=document.createElement('a'); a.className='menu-item'; a.id='menu-os'; a.setAttribute('onclick',"switchSection('os')"); a.innerHTML='<span class="pm-menu-icon">◆</span><span>ProManage OS</span>'; nav.insertBefore(a,nav.children[1]||null); }
+  const section=document.createElement('div'); section.className='section pm-os-section'; section.id='section-os'; section.innerHTML=`
+  <div class="pm-os-hero pm-animate-in"><p class="pm-os-eyebrow">Mission Control Layer</p><h2>ProManage OS</h2><p>Centro visual de alto impacto: diagnóstico automático, modo cliente, cotizaciones premium, firma digital, documentos locales y presentación fullscreen. Todo corre localmente sobre tus datos actuales.</p><div class="pm-os-actions"><button class="btn-primary" onclick="PMOS.scanSystem()" style="width:auto">Escanear sistema</button><button class="btn-secondary" onclick="PMOS.openQuoteModal()" style="width:auto">Crear cotización</button><button class="btn-secondary" onclick="PMOS.openSignatureModal()" style="width:auto">Firma digital</button><button class="btn-secondary" onclick="PMOS.openClientView()" style="width:auto">Modo cliente</button></div></div>
+  <div class="pm-os-grid">
+    <article class="pm-os-card large"><span class="pm-os-badge">Executive Score</span><div class="pm-os-kpi"><div><h3>Score empresarial</h3><p>Calculado según avance, balance financiero, proyectos completados y riesgos activos.</p></div><strong class="pm-os-counter" id="pmOsScore">0</strong></div><div class="pm-os-progress"><i id="pmOsScoreBar" style="--v:0%"></i></div></article>
+    <article class="pm-os-card"><span class="pm-os-badge warn">Alertas</span><h3>Atención inmediata</h3><div class="pm-os-list" id="pmOsAlertList"></div></article>
+    <article class="pm-os-card"><span class="pm-os-badge">Radar</span><h3>Top proyectos</h3><div class="pm-os-list" id="pmOsProjectRadar"></div></article>
+    <article class="pm-os-card"><span class="pm-os-badge">Finanzas</span><h3>Resumen ejecutivo</h3><div id="pmOsFinanceSummary" class="pm-os-list"></div></article>
+    <article class="pm-os-card wide"><span class="pm-os-badge">Premium Tools</span><h3>Herramientas de presentación</h3><div class="pm-os-tool-grid"><div class="pm-os-tool" onclick="PMOS.openClientView()"><strong>Vista cliente fullscreen</strong><span>Presentación limpia con portada automática, galería, avance y riesgos.</span></div><div class="pm-os-tool" onclick="PMOS.openQuoteModal()"><strong>Cotización premium</strong><span>Genera una propuesta imprimible con totales, condiciones y datos del proyecto.</span></div><div class="pm-os-tool" onclick="PMOS.openSignatureModal()"><strong>Firma digital</strong><span>Firma con dedo o mouse y guarda aprobación local por proyecto.</span></div><div class="pm-os-tool" onclick="PMOS.openReportBuilder()"><strong>Report Builder</strong><span>Arma reportes personalizados con secciones opcionales.</span></div></div></article>
+    <article class="pm-os-card wide"><span class="pm-os-badge">Document Center</span><h3>Centro de documentos locales</h3><p class="pm-os-muted">Registro visual de PDFs, cotizaciones, firmas y respaldos creados durante esta sesión/localStorage.</p><div class="pm-os-doc-grid" id="pmOsDocuments"></div></article>
+  </div>`;
+  const firstSection=q('.main-content .section'); main.insertBefore(section, firstSection || main.firstChild.nextSibling);
+}
+function refreshOS(){
+  if(!$('section-os')) return; const ps=projects(), inv=inventory(), ft=financeTotals(), score=enterpriseScore();
+  const scoreEl=$('pmOsScore'); if(scoreEl) animateNumber(scoreEl,score); const bar=$('pmOsScoreBar'); if(bar) bar.style.setProperty('--v',score+'%');
+  const alerts=[]; const high=ps.map(p=>({p,r:riskOfProject(p)})).filter(x=>x.r.level==='Alto'); if(high.length) alerts.push({t:`${high.length} proyecto(s) en riesgo alto`,m:'Revisa evidencias, avance o estado.',c:'danger'}); const low=inv.filter(i=>Number(i.quantity??i.qty??i.stock??0)<=Number(i.min??i.minimum??5)); if(low.length) alerts.push({t:`${low.length} stock(s) bajos`,m:'Inventario necesita revisión.',c:'warn'}); if(ft.balance<0) alerts.push({t:'Balance negativo',m:money(ft.balance),c:'danger'}); if(!alerts.length) alerts.push({t:'Sistema estable',m:'No hay alertas críticas.',c:''});
+  const al=$('pmOsAlertList'); if(al) al.innerHTML=alerts.slice(0,5).map(a=>`<div class="pm-os-list-item"><div><strong>${safe(a.t)}</strong><br><small>${safe(a.m)}</small></div><span class="pm-os-badge ${a.c}">${a.c==='danger'?'Crítico':a.c==='warn'?'Atención':'OK'}</span></div>`).join('');
+  const radar=$('pmOsProjectRadar'); if(radar) radar.innerHTML=(ps.length?ps.map(p=>({p,r:riskOfProject(p)})).sort((a,b)=>b.r.score-a.r.score).slice(0,4).map(x=>`<div class="pm-os-list-item"><div><strong>${safe(x.p.title||x.p.name||'Proyecto')}</strong><br><small>${x.r.progress}% avance · ${x.r.imgs} imagen(es)</small></div><span class="pm-os-badge ${x.r.className}">${x.r.level}</span></div>`).join(''):'<div class="pm-os-list-item"><strong>Aún no hay proyectos</strong><small>Crea uno para activar radar.</small></div>');
+  const fin=$('pmOsFinanceSummary'); if(fin) fin.innerHTML=`<div class="pm-os-list-item"><span>Ingresos</span><strong>${money(ft.income)}</strong></div><div class="pm-os-list-item"><span>Egresos</span><strong>${money(ft.expense)}</strong></div><div class="pm-os-list-item"><span>Balance</span><strong>${money(ft.balance)}</strong></div>`;
+  renderDocs();
+}
+function animateNumber(el,target){ const from=Number(el.textContent)||0; const start=performance.now(); const dur=700; function tick(t){ const p=Math.min(1,(t-start)/dur); el.textContent=Math.round(from+(target-from)*(1-Math.pow(1-p,3))); if(p<1) requestAnimationFrame(tick);} requestAnimationFrame(tick); }
+function docLog(type,title){ const docs=read('pm_os_documents',[]); docs.unshift({id:'doc_'+Date.now(),type,title,date:new Date().toLocaleString('es-GT'),companyId:companyId()}); write('pm_os_documents',docs.slice(0,30)); renderDocs(); }
+function renderDocs(){ const holder=$('pmOsDocuments'); if(!holder) return; const docs=scope(read('pm_os_documents',[])); holder.innerHTML=(docs.length?docs.slice(0,8).map(d=>`<div class="pm-os-tool"><strong>${safe(d.type)}</strong><span>${safe(d.title)}<br>${safe(d.date)}</span></div>`).join(''):'<div class="pm-os-tool"><strong>Sin documentos registrados</strong><span>Genera una cotización, firma o reporte para verlo aquí.</span></div>'); }
+function projectOptions(){ const ps=projects(); return ps.map(p=>`<option value="${safe(p.id)}">${safe(p.title||p.name||'Proyecto')}</option>`).join(''); }
+function ensureModalShell(){
+  if(!$('pmOsModal')){ const m=document.createElement('div'); m.id='pmOsModal'; m.className='pm-os-modal'; m.innerHTML='<div class="pm-os-modal-card"><div class="pm-os-modal-head"><div><p class="pm-os-eyebrow" id="pmOsModalEye">ProManage OS</p><h2 id="pmOsModalTitle" style="margin:0;font-size:30px;letter-spacing:-1px"></h2></div><button class="pm-os-close" onclick="PMOS.closeModal()">×</button></div><div id="pmOsModalBody"></div></div>'; document.body.appendChild(m); }
+  if(!$('pmOsClientView')){ const v=document.createElement('div'); v.id='pmOsClientView'; v.className='pm-os-client-view'; document.body.appendChild(v); }
+}
+function openModal(title,body,eye='ProManage OS'){ ensureModalShell(); $('pmOsModalTitle').textContent=title; $('pmOsModalEye').textContent=eye; $('pmOsModalBody').innerHTML=body; $('pmOsModal').classList.add('active'); }
+function closeModal(){ $('pmOsModal')?.classList.remove('active'); }
+function selectedProject(id){ const ps=projects(); return ps.find(p=>String(p.id)===String(id)) || ps[0] || null; }
+function openQuoteModal(){
+  const body=`<div class="pm-os-form-grid"><div class="form-group"><label>Proyecto</label><select id="pmQuoteProject">${projectOptions()}</select></div><div class="form-group"><label>Cliente</label><input id="pmQuoteClient" placeholder="Nombre del cliente"></div><div class="form-group"><label>Subtotal</label><input id="pmQuoteSubtotal" type="number" min="0" placeholder="15000"></div><div class="form-group"><label>Imprevistos / extras</label><input id="pmQuoteExtras" type="number" min="0" value="0"></div><div class="form-group"><label>Condiciones</label><textarea id="pmQuoteTerms" rows="4">Cotización válida por 15 días. Precios sujetos a disponibilidad de materiales.</textarea></div><div class="form-group"><label>Notas ejecutivas</label><textarea id="pmQuoteNotes" rows="4">Incluye gestión, seguimiento y reporte de avance del proyecto.</textarea></div></div><div class="pm-os-actions"><button class="btn-primary" onclick="PMOS.printQuote()" style="width:auto">Generar cotización PDF</button><button class="btn-secondary" onclick="PMOS.closeModal()" style="width:auto">Cerrar</button></div>`;
+  openModal('Cotización Premium',body,'Sales Proposal Builder');
+}
+function printQuote(){ const p=selectedProject($('pmQuoteProject')?.value); if(!p){toast('Crea un proyecto primero.','error');return;} const client=$('pmQuoteClient')?.value||'Cliente'; const subtotal=Number($('pmQuoteSubtotal')?.value||0); const extras=Number($('pmQuoteExtras')?.value||0); const total=subtotal+extras; const terms=$('pmQuoteTerms')?.value||''; const notes=$('pmQuoteNotes')?.value||''; const img=getImages(p)[0]?.dataUrl||''; const html=`<!doctype html><html><head><meta charset="utf-8"><title>Cotización</title><style>@page{margin:14mm}body{font-family:Inter,Arial,sans-serif;color:#111827}.cover{padding:24px;border-radius:22px;background:linear-gradient(135deg,#111827,#312e81);color:white;margin-bottom:22px}h1{font-size:36px;margin:0 0 8px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.card{border:1px solid #e5e7eb;border-radius:14px;padding:14px}.muted{color:#6b7280}.total{font-size:34px;font-weight:900;color:#312e81}.img{width:100%;height:180px;object-fit:cover;border-radius:14px;margin-top:12px}.footer{margin-top:30px;border-top:1px solid #e5e7eb;padding-top:12px;color:#6b7280;font-size:12px}</style></head><body><section class="cover"><p style="letter-spacing:2px;text-transform:uppercase;margin:0 0 8px;color:#67e8f9;font-weight:900">ProManage Premium Quote</p><h1>Cotización profesional</h1><p>Proyecto: ${safe(p.title||p.name||'Proyecto')}</p></section><div class="grid"><div class="card"><strong>Cliente</strong><p>${safe(client)}</p></div><div class="card"><strong>Fecha</strong><p>${new Date().toLocaleDateString('es-GT')}</p></div></div><div class="card" style="margin-top:12px"><h2>${safe(p.title||p.name||'Proyecto')}</h2><p class="muted">${safe(p.description||'Sin descripción')}</p>${img?`<img class="img" src="${img}">`:''}</div><div class="grid" style="margin-top:12px"><div class="card"><span class="muted">Subtotal</span><div>${money(subtotal)}</div></div><div class="card"><span class="muted">Extras / imprevistos</span><div>${money(extras)}</div></div></div><div class="card" style="margin-top:12px"><span class="muted">Total estimado</span><div class="total">${money(total)}</div></div><div class="grid" style="margin-top:12px"><div class="card"><h3>Condiciones</h3><p>${safe(terms)}</p></div><div class="card"><h3>Notas ejecutivas</h3><p>${safe(notes)}</p></div></div><div class="footer">Documento generado localmente por ProManage OS.</div><script>print();setTimeout(()=>close(),600);<\/script></body></html>`; const w=window.open('','_blank'); if(!w){toast('Permite ventanas emergentes para imprimir.','error');return;} w.document.write(html); w.document.close(); docLog('Cotización',p.title||'Proyecto'); closeModal(); }
+let sigCanvas=null, sigCtx=null, sigProjectId='';
+function openSignatureModal(){ const body=`<div class="pm-os-form-grid"><div class="form-group"><label>Proyecto</label><select id="pmSigProject">${projectOptions()}</select></div><div class="form-group"><label>Nombre del firmante</label><input id="pmSigName" placeholder="Nombre completo"></div></div><canvas id="pmSignaturePad" class="pm-os-signature-pad"></canvas><p class="pm-os-muted">Firma con mouse o dedo. Se guardará localmente y puede aparecer en reportes o vista cliente.</p><div class="pm-os-actions"><button class="btn-secondary" onclick="PMOS.clearSignature()" style="width:auto">Limpiar</button><button class="btn-primary" onclick="PMOS.saveSignature()" style="width:auto">Guardar firma</button></div>`; openModal('Firma Digital',body,'Approval Signature'); setTimeout(initSignature,80); }
+function initSignature(){ sigCanvas=$('pmSignaturePad'); if(!sigCanvas)return; const rect=sigCanvas.getBoundingClientRect(); sigCanvas.width=Math.max(700,Math.round(rect.width*devicePixelRatio)); sigCanvas.height=Math.round(210*devicePixelRatio); sigCtx=sigCanvas.getContext('2d'); sigCtx.scale(devicePixelRatio,devicePixelRatio); sigCtx.lineWidth=2.6; sigCtx.lineCap='round'; sigCtx.strokeStyle='#111827'; sigCtx.fillStyle='#fff'; sigCtx.fillRect(0,0,rect.width,210); let drawing=false; const pos=e=>{const r=sigCanvas.getBoundingClientRect(); const t=e.touches?.[0]||e; return{x:t.clientX-r.left,y:t.clientY-r.top};}; const down=e=>{drawing=true;const p=pos(e);sigCtx.beginPath();sigCtx.moveTo(p.x,p.y);e.preventDefault();}; const move=e=>{if(!drawing)return;const p=pos(e);sigCtx.lineTo(p.x,p.y);sigCtx.stroke();e.preventDefault();}; const up=()=>drawing=false; ['mousedown','touchstart'].forEach(ev=>sigCanvas.addEventListener(ev,down,{passive:false})); ['mousemove','touchmove'].forEach(ev=>sigCanvas.addEventListener(ev,move,{passive:false})); ['mouseup','mouseleave','touchend'].forEach(ev=>sigCanvas.addEventListener(ev,up)); }
+function clearSignature(){ if(sigCtx&&sigCanvas){const r=sigCanvas.getBoundingClientRect(); sigCtx.fillStyle='#fff'; sigCtx.fillRect(0,0,r.width,210);} }
+function saveSignature(){ const p=selectedProject($('pmSigProject')?.value); if(!p||!sigCanvas){toast('Selecciona un proyecto.','error');return;} const all=rows('pm_projects'); const idx=all.findIndex(x=>String(x.id)===String(p.id)); if(idx>=0){ all[idx].signature={name:$('pmSigName')?.value||'Firmante',date:new Date().toISOString(),dataUrl:sigCanvas.toDataURL('image/png')}; write('pm_projects',all); try{window.projects=all}catch(e){} toast('Firma digital guardada.','success'); docLog('Firma digital',p.title||'Proyecto'); closeModal(); } }
+function openClientView(){ const p=selectedProject(); if(!p){toast('Crea un proyecto primero.','error');return;} const imgs=getImages(p); const risk=riskOfProject(p); const sig=p.signature?.dataUrl; const cover=imgs[0]?.dataUrl||''; ensureModalShell(); const v=$('pmOsClientView'); v.style.setProperty('--pm-cover',cover?`url(${cover})`:'radial-gradient(circle at 70% 20%,rgba(99,102,241,.32),transparent 28%)'); v.innerHTML=`<button class="btn-secondary pm-os-client-close" onclick="PMOS.closeClientView()" style="width:auto">Cerrar</button><section class="pm-client-cover"><div><p class="pm-os-eyebrow">Vista Cliente · ProManage OS</p><h1 class="pm-client-title">${safe(p.title||p.name||'Proyecto')}</h1><div class="pm-client-grid"><div class="pm-client-panel"><span class="pm-os-badge ${risk.className}">Riesgo ${risk.level}</span><h2>Resumen ejecutivo</h2><p style="color:#cbd5e1;line-height:1.7">${safe(p.description||'Sin descripción registrada.')}</p><div class="pm-os-progress"><i style="--v:${risk.progress}%"></i></div><p>${risk.progress}% de avance estimado</p></div><div class="pm-client-panel"><h2>Estado</h2><div class="pm-os-list"><div class="pm-os-list-item"><span>Estado</span><strong>${safe(p.status||p.estado||'No definido')}</strong></div><div class="pm-os-list-item"><span>Prioridad</span><strong>${safe(p.priority||p.prioridad||'No definida')}</strong></div><div class="pm-os-list-item"><span>Evidencias</span><strong>${imgs.length}</strong></div></div></div></div><div class="pm-client-panel" style="margin-top:22px"><h2>Galería</h2><div class="pm-client-gallery">${imgs.length?imgs.map(i=>`<img src="${i.dataUrl}" alt="${safe(i.name)}">`).join(''):'<p style="color:#94a3b8">Sin imágenes registradas.</p>'}</div></div>${sig?`<div class="pm-client-panel" style="margin-top:22px"><h2>Aprobación</h2><p>Firmado por ${safe(p.signature.name||'Firmante')} el ${new Date(p.signature.date).toLocaleDateString('es-GT')}</p><img src="${sig}" style="background:#fff;border-radius:16px;max-width:360px;width:100%;padding:10px"></div>`:''}</div></section>`; v.classList.add('active'); docLog('Vista cliente',p.title||'Proyecto'); }
+function closeClientView(){ $('pmOsClientView')?.classList.remove('active'); }
+function openReportBuilder(){ const body=`<div class="pm-os-form-grid"><div class="form-group"><label>Proyecto</label><select id="pmReportProject">${projectOptions()}</select></div><div class="form-group"><label>Estilo</label><select id="pmReportStyle"><option>Ejecutivo premium</option><option>Técnico compacto</option></select></div></div><div class="pm-os-list"><label class="pm-os-list-item"><span>Portada visual</span><input type="checkbox" id="rbCover" checked></label><label class="pm-os-list-item"><span>Galería</span><input type="checkbox" id="rbGallery" checked></label><label class="pm-os-list-item"><span>Riesgo y recomendaciones</span><input type="checkbox" id="rbRisk" checked></label><label class="pm-os-list-item"><span>Firma digital</span><input type="checkbox" id="rbSignature" checked></label></div><div class="pm-os-actions"><button class="btn-primary" onclick="PMOS.printCustomReport()" style="width:auto">Generar reporte</button></div>`; openModal('Constructor de Reportes',body,'Report Builder'); }
+function printCustomReport(){ const p=selectedProject($('pmReportProject')?.value); if(!p){toast('No hay proyecto.','error');return;} try{ if(typeof window.generateSingleProjectPDF==='function'){ const sel=$('reportProjectSelect'); if(sel){sel.value=p.id;} window.generateSingleProjectPDF(); docLog('Reporte PDF',p.title||'Proyecto'); closeModal(); } }catch(e){toast('No se pudo usar el generador actual.','error');} }
+function scanSystem(){ refreshOS(); switchToOS(); toast('Escaneo del sistema completado.','success'); }
+function switchToOS(){ if(typeof window.switchSection==='function') window.switchSection('os'); else {qa('.section').forEach(s=>s.classList.remove('active')); $('section-os')?.classList.add('active');} setTimeout(refreshOS,80); }
+function installHooks(){
+  const oldSwitch=window.switchSection; if(typeof oldSwitch==='function'&&!oldSwitch.__pmos){ const wrapped=function(section){ const res=oldSwitch.apply(this,arguments); setTimeout(()=>{setMobileState(); if(section==='os') refreshOS(); qa('.section.active .panel,.section.active .stat-card,.section.active .pm-os-card').forEach((el,i)=>{el.classList.add('pm-animate-in');el.style.animationDelay=(i*35)+'ms';});},80); return res; }; wrapped.__pmos=true; window.switchSection=wrapped; }
+  const oldSelect=window.selectCompany; if(typeof oldSelect==='function'&&!oldSelect.__pmos){ const wrapped=function(){ const res=oldSelect.apply(this,arguments); setTimeout(()=>{setMobileState();refreshOS();},160); return res;}; wrapped.__pmos=true; window.selectCompany=wrapped; }
+}
+function init(){ enhanceLogin(); injectOSSection(); enhanceSidebar(); installMobileShell(); ensureModalShell(); installHooks(); setMobileState(); refreshOS(); setInterval(()=>{setMobileState(); if(document.body.classList.contains('pm-dashboard-active')) refreshOS();},2500); }
+window.PMOS={scanSystem,openQuoteModal,printQuote,openSignatureModal,clearSignature,saveSignature,openClientView,closeClientView,openReportBuilder,printCustomReport,closeModal,toggleMobileSidebar,refresh:refreshOS};
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init,{once:true}); else init();
+window.addEventListener('resize',setMobileState,{passive:true});
 })();
