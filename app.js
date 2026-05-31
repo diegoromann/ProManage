@@ -4694,3 +4694,347 @@ setTimeout(injectSystemHealth,900); setInterval(()=>{ if(document.body.classList
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, {once:true});
   else init();
 })();
+
+/* =========================================================
+   PROMANAGE FINAL FIX: sidebar móvil, Ctrl+K, aislamiento
+   por perfil, PDF scoped y búsqueda desplegable.
+   Keep this block LAST.
+   ========================================================= */
+(function(){
+  'use strict';
+  const MOBILE = window.matchMedia('(max-width:1024px)');
+  const $ = (id) => document.getElementById(id);
+  function readJSON(key, fallback){ try{ const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; }catch(e){ return fallback; } }
+  function writeJSON(key, value){ try{ localStorage.setItem(key, JSON.stringify(value)); return true; }catch(e){ console.warn('ProManage: no se pudo guardar '+key, e); return false; } }
+  function safe(value){ return String(value ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
+  function notify(message,type){ try{ if(typeof showToast === 'function') showToast(message,type||'success'); else console.log(message); }catch(e){ console.log(message); } }
+  function user(){ try{ if(typeof currentUser !== 'undefined' && currentUser) return currentUser; }catch(e){} return readJSON('pm_currentUser', null); }
+  function isAdmin(){ const u=user(); return !!u && (u.role === 'admin' || String(u.email||'').toLowerCase() === 'admin@promanage.com' || u.id === 'admin'); }
+  function uid(){ return String(user()?.id || ''); }
+  function companyId(){ try{ if(typeof selectedCompanyId !== 'undefined' && selectedCompanyId) return String(selectedCompanyId); }catch(e){} return String(localStorage.getItem('pm_selectedCompanyId') || ''); }
+  function companiesList(){ try{ if(typeof companies !== 'undefined' && Array.isArray(companies)) return companies; }catch(e){} return readJSON('pm_companies', []); }
+  function companyIsOwnedByUser(id){ if(isAdmin()) return true; const u=uid(); const comp=companiesList().find(c => String(c?.id||'') === String(id||'')); return !!comp && String(comp.createdBy||'') === u; }
+  function allRows(key, localName){
+    try{ if(localName && typeof eval(localName) !== 'undefined' && Array.isArray(eval(localName))) return eval(localName); }catch(e){}
+    return readJSON(key, []);
+  }
+  function recordVisible(row){
+    if(!row) return false;
+    if(isAdmin()) return true;
+    const cid = companyId();
+    if(!cid) return false;
+    if(String(row.companyId || '') !== cid) return false;
+    if(row.createdBy && String(row.createdBy) !== uid()) return false;
+    return companyIsOwnedByUser(cid);
+  }
+  function visibleProjects(){ return allRows('pm_projects','projects').filter(recordVisible); }
+  function visibleRows(key, localName){ return allRows(key, localName).filter(recordVisible); }
+  function setLocalArray(localName, rows){
+    try{ eval(localName + ' = rows'); }catch(e){}
+  }
+  function tagOwnedRecords(key, localName){
+    const u = user();
+    if(!u) return;
+    const cid = companyId();
+    const rows = readJSON(key, []);
+    if(!Array.isArray(rows)) return;
+    let changed = false;
+    rows.forEach(row => {
+      if(!row || typeof row !== 'object') return;
+      if(cid && String(row.companyId || '') === cid && !row.createdBy){ row.createdBy = u.id; changed = true; }
+      if(cid && String(row.companyId || '') === cid && !row.updatedBy){ row.updatedBy = u.id; changed = true; }
+    });
+    if(changed){ writeJSON(key, rows); setLocalArray(localName, rows); }
+  }
+  function wrapSubmit(fnName, key, localName){
+    let original = null;
+    try{ original = window[fnName] || eval(fnName); }catch(e){ original = window[fnName]; }
+    if(typeof original !== 'function' || original.__pmFinalScoped) return;
+    const patched = function(){
+      const result = original.apply(this, arguments);
+      setTimeout(() => { tagOwnedRecords(key, localName); refreshReportProjects(); }, 80);
+      setTimeout(() => { tagOwnedRecords(key, localName); refreshReportProjects(); }, 600);
+      return result;
+    };
+    patched.__pmFinalScoped = true;
+    window[fnName] = patched;
+    try{ eval(fnName + ' = patched'); }catch(e){}
+  }
+  function patchSubmitOwnership(){
+    wrapSubmit('submitProjectForm','pm_projects','projects');
+    wrapSubmit('submitCreateMember','pm_members','members');
+    wrapSubmit('submitCreateEmployee','pm_employees','employees');
+    wrapSubmit('submitCreateClient','pm_clients','clients');
+    wrapSubmit('submitCreateFinance','pm_finances','finances');
+    wrapSubmit('submitCreateInventory','pm_inventory','inventory');
+  }
+
+  /* Mobile drawer */
+  function dashboardVisible(){
+    const dash = $('dashboardWrapper');
+    if(!dash) return false;
+    if(String(dash.style.display || '').toLowerCase() === 'none') return false;
+    try{ return getComputedStyle(dash).display !== 'none'; }catch(e){ return true; }
+  }
+  function syncDashboardClass(){
+    const visible = dashboardVisible();
+    document.body.classList.toggle('pm-dashboard-active', visible);
+    if(!visible) closeMobileMenu();
+    if(!MOBILE.matches) closeMobileMenu();
+  }
+  function ensureMobileMenu(){
+    let btn = $('pmMobileSidebarToggle');
+    if(!btn){
+      btn = document.createElement('button');
+      btn.id = 'pmMobileSidebarToggle';
+      btn.type = 'button';
+      btn.className = 'pm-mobile-sidebar-toggle';
+      btn.innerHTML = '<span class="pm-bars" aria-hidden="true"></span><span>Menú</span>';
+      document.body.appendChild(btn);
+    }
+    btn.setAttribute('aria-label','Abrir menú principal');
+    btn.onclick = function(ev){ ev.preventDefault(); ev.stopPropagation(); toggleMobileMenu(); };
+    let backdrop = $('pmMobileSidebarBackdrop');
+    if(!backdrop){
+      backdrop = document.createElement('div');
+      backdrop.id = 'pmMobileSidebarBackdrop';
+      backdrop.className = 'pm-mobile-sidebar-backdrop';
+      document.body.appendChild(backdrop);
+    }
+    backdrop.onclick = closeMobileMenu;
+  }
+  function openMobileMenu(){
+    ensureMobileMenu();
+    if(!dashboardVisible()) return;
+    document.body.classList.add('pm-dashboard-active','pm-mobile-menu-open');
+    $('sidebar')?.classList.add('active');
+    $('pmMobileSidebarBackdrop')?.classList.add('active');
+    $('pmMobileSidebarToggle')?.setAttribute('aria-expanded','true');
+  }
+  function closeMobileMenu(){
+    document.body.classList.remove('pm-mobile-menu-open');
+    $('sidebar')?.classList.remove('active');
+    $('pmMobileSidebarBackdrop')?.classList.remove('active');
+    $('pmMobileSidebarToggle')?.setAttribute('aria-expanded','false');
+  }
+  function toggleMobileMenu(){
+    if(document.body.classList.contains('pm-mobile-menu-open')) closeMobileMenu(); else openMobileMenu();
+  }
+  window.openMobileSidebar = openMobileMenu;
+  window.closeMobileSidebar = closeMobileMenu;
+  window.toggleSidebar = function(open){ if(typeof open === 'boolean') return open ? openMobileMenu() : closeMobileMenu(); return toggleMobileMenu(); };
+  document.addEventListener('click', function(ev){
+    const item = ev.target && ev.target.closest ? ev.target.closest('#sidebar .menu-item') : null;
+    if(item && MOBILE.matches) setTimeout(closeMobileMenu, 120);
+  }, true);
+
+  /* Correct Ctrl+K */
+  function runAction(action){
+    if(action === 'dash'){
+      if(typeof switchSection === 'function') switchSection('dash');
+    } else if(action === 'pomodoro'){
+      if(typeof switchSection === 'function') switchSection('dash');
+      setTimeout(() => {
+        const timer = $('dashPomodoroDisplay');
+        const panel = timer ? timer.closest('.panel') : null;
+        (panel || timer)?.scrollIntoView({behavior:'smooth', block:'center'});
+        if(panel){ panel.classList.add('pm-command-pulse'); setTimeout(()=>panel.classList.remove('pm-command-pulse'), 1200); }
+      }, 160);
+    } else if(typeof switchSection === 'function') {
+      switchSection(action);
+    }
+  }
+  function openCommandPaletteFixed(){
+    document.querySelectorAll('#pmPalette,.pm-fixed-command-palette').forEach(el => el.remove());
+    const actions = [
+      {label:'Abrir Dashboard', hint:'Panel General', action:'dash'},
+      {label:'Abrir Pomodoro', hint:'Temporizador de enfoque', action:'pomodoro'},
+      {label:'Abrir Proyectos', hint:'Lista y Kanban', action:'projects'},
+      {label:'Abrir Finanzas', hint:'Ingresos, egresos y Excel', action:'finances'},
+      {label:'Abrir Reportes', hint:'PDF por proyecto', action:'reports'},
+      {label:'Abrir Inventario', hint:'Stock y materiales', action:'inventory'},
+      {label:'Abrir Clientes', hint:'Cartera de clientes', action:'clients'}
+    ];
+    const palette = document.createElement('div');
+    palette.className = 'pm-fixed-command-palette';
+    palette.innerHTML = '<div class="pm-fixed-command-box"><input id="pmFixedCommandInput" placeholder="Buscar acción..." autocomplete="off"><div id="pmFixedCommandResults"></div></div>';
+    document.body.appendChild(palette);
+    const input = $('pmFixedCommandInput');
+    const results = $('pmFixedCommandResults');
+    function render(){
+      const q = String(input.value || '').trim().toLowerCase();
+      const list = actions.filter(a => !q || (a.label + ' ' + a.hint).toLowerCase().includes(q));
+      results.innerHTML = list.map((a,i) => '<button type="button" class="pm-fixed-command-item" data-i="'+i+'"><span>'+safe(a.label)+'</span><small>'+safe(a.hint)+'</small></button>').join('') || '<div class="pm-fixed-command-item"><span>Sin resultados</span><small>Intenta otra búsqueda</small></div>';
+      Array.from(results.querySelectorAll('button[data-i]')).forEach((btn, idx) => {
+        btn.onclick = () => { const chosen = list[idx]; palette.remove(); runAction(chosen.action); };
+      });
+    }
+    input.addEventListener('input', render);
+    palette.addEventListener('click', ev => { if(ev.target === palette) palette.remove(); });
+    const onKey = ev => { if(ev.key === 'Escape'){ ev.preventDefault(); palette.remove(); document.removeEventListener('keydown', onKey, true); } };
+    document.addEventListener('keydown', onKey, true);
+    render();
+    setTimeout(()=>input.focus(), 30);
+  }
+  try{ window.openCommandPalette = openCommandPaletteFixed; openCommandPalette = openCommandPaletteFixed; }catch(e){ window.openCommandPalette = openCommandPaletteFixed; }
+  document.addEventListener('keydown', function(ev){
+    if((ev.ctrlKey || ev.metaKey) && String(ev.key).toLowerCase() === 'k'){
+      ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation(); openCommandPaletteFixed();
+    }
+  }, true);
+
+  /* Report PDF: admin sees all, normal users only their selected workspace records */
+  function getProjectImages(project){
+    const out = []; const seen = new Set(); const pid = String(project?.id || '');
+    function add(item, i){
+      if(!item) return;
+      const dataUrl = item.dataUrl || item.url || item.src || item.base64 || item.image || item.content || '';
+      if(!String(dataUrl).startsWith('data:image') || seen.has(dataUrl)) return;
+      seen.add(dataUrl);
+      out.push({name:item.name || item.filename || item.title || ('Imagen '+(i+1)), dataUrl, size:item.size || 0, createdAt:item.createdAt || item.date || item.uploadedAt || ''});
+    }
+    function addList(list){ if(Array.isArray(list)) list.forEach(add); }
+    try{ if(typeof window.getProjectImages === 'function') addList(window.getProjectImages(pid)); }catch(e){}
+    ['pm_projectImages','pm_project_images','pm_projectsImages','pm_gallery','pm_media','pm_attachments'].forEach(key => {
+      const data = readJSON(key, null);
+      if(Array.isArray(data)) addList(data.filter(x => String(x?.projectId || x?.project || x?.parentId || '') === pid));
+      else if(data && Array.isArray(data[pid])) addList(data[pid]);
+    });
+    ['images','gallery','media','attachments','files','evidence','evidences'].forEach(k => addList(project?.[k]));
+    return out;
+  }
+  function refreshReportProjects(){
+    const select = $('reportProjectSelect');
+    if(!select) return;
+    const old = select.value;
+    const list = visibleProjects();
+    select.innerHTML = '';
+    if(!list.length){ select.innerHTML = '<option value="">No hay proyectos disponibles</option>'; return; }
+    list.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = String(p.id || '');
+      opt.dataset.projectId = String(p.id || '');
+      opt.textContent = p.title || p.name || 'Proyecto sin nombre';
+      select.appendChild(opt);
+    });
+    if(Array.from(select.options).some(o => o.value === old)) select.value = old;
+  }
+  window.pmRefreshReportProjects = refreshReportProjects;
+  window.renderReportProjects = refreshReportProjects;
+  window.populateReportProjects = refreshReportProjects;
+  function findVisibleProject(value){
+    const raw = String(value || '').trim();
+    if(!raw) return null;
+    const list = visibleProjects();
+    return list.find(p => String(p.id || '') === raw) || list.find(p => String(p.title || p.name || '').trim().toLowerCase() === raw.toLowerCase()) || null;
+  }
+  function bytes(n){ n=Number(n||0); if(!n) return ''; if(n<1024) return n+' B'; if(n<1048576) return (n/1024).toFixed(1)+' KB'; return (n/1048576).toFixed(2)+' MB'; }
+  function reportHTML(project){
+    const imgs = getProjectImages(project);
+    const title = project.title || project.name || 'Proyecto';
+    const now = new Date();
+    const gallery = imgs.length ? imgs.map((img,i) => '<figure><img src="'+img.dataUrl+'"><figcaption><strong>'+safe(img.name || ('Imagen '+(i+1)))+'</strong><span>'+safe([img.createdAt ? new Date(img.createdAt).toLocaleDateString('es-GT') : '', img.size ? bytes(img.size) : ''].filter(Boolean).join(' · '))+'</span></figcaption></figure>').join('') : '<div class="empty">Este proyecto aún no tiene imágenes registradas.</div>';
+    return '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>'+safe(title)+'</title><style>@page{size:A4;margin:13mm}*{box-sizing:border-box}body{font-family:Inter,Arial,sans-serif;margin:0;color:#111827;background:white;font-size:13px;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact}.cover{padding:24px 0 20px;border-bottom:4px solid #0b1220;margin-bottom:22px}.eyebrow{font-size:10px;text-transform:uppercase;letter-spacing:2px;font-weight:900;color:#0b6fe8;margin:0 0 8px}h1{font-size:34px;line-height:1.05;margin:0 0 8px;letter-spacing:-1px}.subtitle{color:#4b5563;margin:0}.meta{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:20px 0}.card{border:1px solid #d1d5db;border-radius:12px;padding:12px;background:#f8fafc}.card span{display:block;color:#6b7280;font-size:10px;text-transform:uppercase;font-weight:900;letter-spacing:.5px}.card strong{display:block;margin-top:4px;font-size:14px}.desc{border-left:4px solid #0b1220;background:#f8fafc;border-radius:0 12px 12px 0;padding:16px;white-space:pre-wrap}.gallery-head{display:flex;justify-content:space-between;align-items:end;border-bottom:1px solid #e5e7eb;margin:28px 0 16px;padding-bottom:10px}.gallery-head h2{margin:0;font-size:18px}.gallery-head span{color:#6b7280}.gallery{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}.gallery figure{margin:0;border:1px solid #d1d5db;border-radius:14px;padding:10px;break-inside:avoid;background:white}.gallery img{width:100%;height:210px;object-fit:cover;border-radius:9px;border:1px solid #e5e7eb;display:block}.gallery figcaption{margin-top:8px;font-size:11px;color:#4b5563}.gallery figcaption strong{display:block;color:#111827;font-size:12px}.gallery figcaption span{color:#6b7280}.empty{border:1px dashed #cbd5e1;border-radius:14px;background:#f8fafc;color:#64748b;padding:18px}.footer{margin-top:26px;border-top:1px solid #e5e7eb;padding-top:10px;color:#6b7280;font-size:11px}</style></head><body><main><header class="cover"><p class="eyebrow">Reporte profesional de proyecto</p><h1>'+safe(title)+'</h1><p class="subtitle">Generado el '+now.toLocaleDateString('es-GT')+' a las '+now.toLocaleTimeString('es-GT')+'</p></header><section class="meta"><div class="card"><span>ID</span><strong>'+safe(project.id || 'No disponible')+'</strong></div><div class="card"><span>Estado</span><strong>'+safe(project.status || project.estado || 'No definido')+'</strong></div><div class="card"><span>Prioridad</span><strong>'+safe(project.priority || project.prioridad || 'No definida')+'</strong></div><div class="card"><span>Empresa</span><strong>'+safe(project.companyId || 'No registrada')+'</strong></div></section><section><h2>Información del proyecto</h2><div class="desc">'+safe(project.description || project.desc || 'Sin descripción registrada.')+'</div></section><section><div class="gallery-head"><h2>Galería del proyecto</h2><span>'+imgs.length+' imagen'+(imgs.length===1?'':'es')+'</span></div><div class="gallery">'+gallery+'</div></section><footer class="footer">Documento generado localmente por ProManage. En perfiles comunes solo se incluyen datos del usuario y empresa seleccionada.</footer></main></body></html>';
+  }
+  function printHTML(html){
+    const frame = document.createElement('iframe');
+    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none';
+    document.body.appendChild(frame);
+    const doc = frame.contentDocument || frame.contentWindow.document;
+    doc.open(); doc.write(html); doc.close();
+    const run = () => {
+      const imgs = Array.from(doc.images || []);
+      Promise.race([Promise.all(imgs.map(img => new Promise(r => { if(img.complete) r(); else { img.onload = r; img.onerror = r; } }))), new Promise(r => setTimeout(r, 2200))]).then(() => { frame.contentWindow.focus(); frame.contentWindow.print(); setTimeout(()=>frame.remove(), 6000); });
+    };
+    setTimeout(run, 250);
+  }
+  window.generateSingleProjectPDF = function(){
+    refreshReportProjects();
+    const value = $('reportProjectSelect')?.value || '';
+    if(!value){ alert('Selecciona un proyecto'); return; }
+    const project = findVisibleProject(value);
+    if(!project){ alert('Ese proyecto no pertenece al perfil/empresa actual o ya no existe.'); refreshReportProjects(); return; }
+    printHTML(reportHTML(project));
+    notify('PDF preparado únicamente con el proyecto seleccionado.', 'success');
+  };
+
+  /* Search loupe behavior */
+  function patchSearch(){
+    const shell = $('pageSearchShell');
+    const input = $('globalSearchInput');
+    const btn = shell?.querySelector('.icon-search-btn');
+    if(!shell || !input || !btn) return;
+    btn.onclick = function(ev){ ev.preventDefault(); ev.stopPropagation(); if(typeof window.toggleGlobalSearchPanel === 'function') window.toggleGlobalSearchPanel(true); shell.classList.add('active'); setTimeout(()=>input.focus(), 30); };
+    input.addEventListener('focus', () => shell.classList.add('active'));
+  }
+
+  /* Theme stability */
+  function syncTheme(){
+    const html = document.documentElement;
+    let theme = html.getAttribute('data-theme') || localStorage.getItem('pm_theme') || localStorage.getItem('theme') || 'dark';
+    if(theme !== 'light') theme = 'dark';
+    html.setAttribute('data-theme', theme);
+    document.body.setAttribute('data-theme', theme);
+    const toggleText = $('themeToggleText');
+    if(toggleText) toggleText.textContent = theme === 'light' ? 'Modo Oscuro' : 'Modo Claro';
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if(meta) meta.setAttribute('content', theme === 'light' ? '#eef5fb' : '#020611');
+  }
+  const oldToggleTheme = window.toggleTheme;
+  window.toggleTheme = function(){
+    const current = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+    const next = current === 'light' ? 'dark' : 'light';
+    localStorage.setItem('pm_theme', next); localStorage.setItem('theme', next);
+    document.documentElement.setAttribute('data-theme', next); document.body.setAttribute('data-theme', next);
+    syncTheme();
+    try{ if(typeof renderMinimalCharts === 'function') setTimeout(renderMinimalCharts,80); }catch(e){}
+    return oldToggleTheme && oldToggleTheme.__pmDoNotRun ? oldToggleTheme.apply(this, arguments) : undefined;
+  };
+
+  /* Navigation wrappers */
+  function patchNavigation(){
+    const oldSwitch = window.switchSection;
+    if(typeof oldSwitch === 'function' && !oldSwitch.__pmFinalFix){
+      const patched = function(section){ const r = oldSwitch.apply(this, arguments); setTimeout(()=>{ syncDashboardClass(); if(section === 'reports') refreshReportProjects(); patchSearch(); }, 90); if(MOBILE.matches) closeMobileMenu(); return r; };
+      patched.__pmFinalFix = true; window.switchSection = patched; try{ switchSection = patched; }catch(e){}
+    }
+    const oldSelect = window.selectCompany;
+    if(typeof oldSelect === 'function' && !oldSelect.__pmFinalFix){
+      const patchedSelect = function(){ const r = oldSelect.apply(this, arguments); setTimeout(()=>{ syncDashboardClass(); patchSubmitOwnership(); refreshReportProjects(); patchSearch(); }, 120); return r; };
+      patchedSelect.__pmFinalFix = true; window.selectCompany = patchedSelect; try{ selectCompany = patchedSelect; }catch(e){}
+    }
+  }
+  function init(){
+    ensureMobileMenu(); syncTheme(); syncDashboardClass(); patchNavigation(); patchSubmitOwnership(); patchSearch(); refreshReportProjects();
+    window.addEventListener('resize', () => { syncDashboardClass(); if(!MOBILE.matches) closeMobileMenu(); }, {passive:true});
+    window.addEventListener('orientationchange', () => setTimeout(syncDashboardClass, 180), {passive:true});
+    setInterval(() => { syncDashboardClass(); patchSearch(); }, 900);
+    const dash = $('dashboardWrapper'); if(dash) new MutationObserver(() => setTimeout(syncDashboardClass, 40)).observe(dash,{attributes:true,attributeFilter:['style','class']});
+    const htmlObs = new MutationObserver(syncTheme); htmlObs.observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, {once:true}); else init();
+})();
+
+/* === PROMANAGE FINAL PROFILE FILTER OVERRIDE === */
+(function(){
+  'use strict';
+  function readJSON(key, fallback){ try{ const raw=localStorage.getItem(key); return raw?JSON.parse(raw):fallback; }catch(e){ return fallback; } }
+  function currentUserSafe(){ try{ if(typeof currentUser !== 'undefined' && currentUser) return currentUser; }catch(e){} return readJSON('pm_currentUser', null); }
+  function isAdminSafe(){ const u=currentUserSafe(); return !!u && (u.id==='admin' || u.role==='admin' || String(u.email||'').toLowerCase()==='admin@promanage.com'); }
+  function uidSafe(){ return String(currentUserSafe()?.id || ''); }
+  function currentCompanySafe(){ try{ if(typeof selectedCompanyId !== 'undefined' && selectedCompanyId) return String(selectedCompanyId); }catch(e){} return String(localStorage.getItem('pm_selectedCompanyId') || ''); }
+  function visibleRecord(item){
+    if(!item) return false;
+    const cid=currentCompanySafe();
+    if(isAdminSafe()) return !cid || !item.companyId || String(item.companyId)===cid;
+    if(!cid) return false;
+    if(String(item.companyId || '') !== cid) return false;
+    return !item.createdBy || String(item.createdBy) === uidSafe();
+  }
+  try{
+    filterCompany = function(items){ return Array.isArray(items) ? items.filter(visibleRecord) : []; };
+  }catch(e){}
+  try{
+    window.pmGetScopedRows = function(key){ return readJSON(key, []).filter(visibleRecord); };
+  }catch(e){}
+})();
