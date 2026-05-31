@@ -4416,7 +4416,7 @@ if(typeof oldSwitch==='function') window.switchSection=function(section){ const 
 function installManifest(){
   try{
     if(document.querySelector('link[rel="manifest"]')) return;
-    const manifest={name:'ProManage',short_name:'ProManage',start_url:'./index.html',display:'standalone',background_color:'#0f172a',theme_color:'#6366f1',description:'Gestión local de proyectos, finanzas, inventario y reportes.',icons:[{src:'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"%3E%3Crect width="512" height="512" rx="112" fill="%230f172a"/%3E%3Cpath d="M126 322V150h155c67 0 109 34 109 88s-42 87-109 87h-69v37h-86Zm86-105h63c18 0 29-9 29-23s-11-23-29-23h-63v46Z" fill="%236366f1"/%3E%3Cpath d="M126 385h260v-55H126v55Z" fill="%2306b6d4"/%3E%3C/svg%3E',sizes:'512x512',type:'image/svg+xml'}]};
+    const manifest={name:'ProManage',short_name:'ProManage',start_url:'./index.html',display:'standalone',background_color:'#050505',theme_color:'#c9a86a',description:'Gestión local de proyectos, finanzas, inventario y reportes.',icons:[{src:'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"%3E%3Crect width="512" height="512" rx="112" fill="%23050505"/%3E%3Cpath d="M126 322V150h155c67 0 109 34 109 88s-42 87-109 87h-69v37h-86Zm86-105h63c18 0 29-9 29-23s-11-23-29-23h-63v46Z" fill="%23c9a86a"/%3E%3Cpath d="M126 385h260v-55H126v55Z" fill="%23f1dfad"/%3E%3C/svg%3E',sizes:'512x512',type:'image/svg+xml'}]};
     const link=document.createElement('link'); link.rel='manifest'; link.href='data:application/manifest+json,'+encodeURIComponent(JSON.stringify(manifest)); document.head.appendChild(link);
   }catch(e){}
 }
@@ -4870,4 +4870,211 @@ setTimeout(injectSystemHealth,900); setInterval(()=>{ if(document.body.classList
     window[name]=wrapped;
   }
   ['handleAuth','toggleAuthMode','submitCreateCompany','selectCompany','openCompanyPicker','logout','switchSection','toggleUserDropdown','toggleSmartAssistant','renderDashboard','renderProjects','renderFinances','renderInventory'].forEach(wrap);
+})();
+
+/* =========================================================
+   PROMANAGE GRAPHITE PREMIUM V3 RUNTIME
+   Tema claro real + layout escritorio/móvil estable + look sin azul/morado.
+   ========================================================= */
+(function(){
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+  const raf2 = fn => requestAnimationFrame(()=>requestAnimationFrame(fn));
+
+  function setThemeMeta(theme){
+    let meta=document.querySelector('meta[name="theme-color"]');
+    if(!meta){ meta=document.createElement('meta'); meta.name='theme-color'; document.head.appendChild(meta); }
+    meta.content = theme === 'light' ? '#f5f1e8' : '#050505';
+  }
+  function applyGraphiteTheme(theme){
+    const safe = theme === 'light' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', safe);
+    if(document.body) document.body.setAttribute('data-theme', safe);
+    try{ localStorage.setItem('pm_theme', safe); localStorage.setItem('theme', safe); }catch(e){}
+    setThemeMeta(safe);
+    const label=$('themeToggleText');
+    if(label) label.textContent = safe === 'dark' ? 'Modo Claro' : 'Modo Oscuro';
+    return safe;
+  }
+  window.applyTheme = applyGraphiteTheme;
+  window.toggleTheme = function(){
+    const current = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+    applyGraphiteTheme(current === 'light' ? 'dark' : 'light');
+    syncGraphiteLayout(true);
+  };
+
+  function isDisplayNone(el){
+    if(!el) return true;
+    const inline=(el.style.display||'').trim().toLowerCase();
+    if(inline === 'none') return true;
+    try{return getComputedStyle(el).display === 'none';}catch(e){return false;}
+  }
+  function currentCompanyExists(){
+    try{
+      const id=(typeof selectedCompanyId !== 'undefined' && selectedCompanyId) ? selectedCompanyId : localStorage.getItem('pm_selectedCompanyId');
+      if(!id) return false;
+      const list=JSON.parse(localStorage.getItem('pm_companies')||'[]');
+      return Array.isArray(list) && list.some(c=>String(c.id)===String(id));
+    }catch(e){return !!localStorage.getItem('pm_selectedCompanyId');}
+  }
+  function shouldDashboardBeActive(){
+    const dash=$('dashboardWrapper'), auth=$('authWrapper'), picker=$('companyPickerWrapper');
+    if(!dash) return false;
+    const dashInline=(dash.style.display||'').trim().toLowerCase();
+    if(dashInline && dashInline !== 'none') return true;
+    try{ if(getComputedStyle(dash).display !== 'none' && dash.offsetParent !== null) return true; }catch(e){}
+    if(currentCompanyExists() && auth && picker && isDisplayNone(auth) && isDisplayNone(picker)) return true;
+    return false;
+  }
+  function hideLoadingLayers(){
+    ['pmSplash','pmLoader'].forEach(id=>{
+      const el=$(id);
+      if(el){
+        el.classList.add('hidden');
+        el.style.display='none';
+        el.style.opacity='0';
+        el.style.visibility='hidden';
+        el.style.pointerEvents='none';
+      }
+    });
+  }
+  function ensureMobileControls(){
+    if(!$('pmMobileSidebarBackdrop')){
+      const bg=document.createElement('div');
+      bg.id='pmMobileSidebarBackdrop';
+      bg.className='pm-mobile-sidebar-backdrop';
+      bg.addEventListener('click',closeGraphiteSidebar,{passive:true});
+      document.body.appendChild(bg);
+    }
+    if(!$('pmMobileSidebarToggle')){
+      const b=document.createElement('button');
+      b.id='pmMobileSidebarToggle';
+      b.className='pm-mobile-sidebar-toggle';
+      b.type='button';
+      b.setAttribute('aria-label','Abrir menú');
+      b.innerHTML='<i aria-hidden="true"></i><span>Menú</span>';
+      b.addEventListener('click',toggleGraphiteSidebar);
+      document.body.appendChild(b);
+    }else if(!$('pmMobileSidebarToggle').querySelector('i')){
+      $('pmMobileSidebarToggle').innerHTML='<i aria-hidden="true"></i><span>Menú</span>';
+    }
+  }
+  function closeGraphiteSidebar(){
+    const sb=$('sidebar'), bg=$('pmMobileSidebarBackdrop'), b=$('pmMobileSidebarToggle');
+    if(sb) sb.classList.remove('active');
+    if(bg) bg.classList.remove('active');
+    document.body.classList.remove('pm-mobile-sidebar-open');
+    if(b) b.setAttribute('aria-label','Abrir menú');
+  }
+  function toggleGraphiteSidebar(){
+    if(window.innerWidth > 1024) return;
+    const sb=$('sidebar'), bg=$('pmMobileSidebarBackdrop'), b=$('pmMobileSidebarToggle');
+    if(!sb) return;
+    const open=!sb.classList.contains('active');
+    sb.classList.toggle('active',open);
+    if(bg) bg.classList.toggle('active',open);
+    document.body.classList.toggle('pm-mobile-sidebar-open',open);
+    if(b) b.setAttribute('aria-label',open?'Cerrar menú':'Abrir menú');
+  }
+  window.toggleProManageMobileMenu=toggleGraphiteSidebar;
+  window.closeProManageMobileMenu=closeGraphiteSidebar;
+
+  function syncGraphiteLayout(force){
+    if(!document.body) return;
+    ensureMobileControls();
+    const dash=$('dashboardWrapper'), auth=$('authWrapper'), picker=$('companyPickerWrapper');
+    const active=shouldDashboardBeActive();
+    document.body.classList.toggle('pm-dashboard-active', active);
+    document.body.classList.toggle('pm-auth-active', !active && !!auth && !isDisplayNone(auth));
+    document.body.classList.toggle('pm-picker-active', !active && !!picker && !isDisplayNone(picker));
+    if(active){
+      if(dash) { dash.style.display='flex'; dash.style.visibility='visible'; dash.style.opacity='1'; }
+      if(auth) auth.style.display='none';
+      if(picker) picker.style.display='none';
+      hideLoadingLayers();
+      const sb=$('sidebar');
+      if(sb){ sb.style.display='flex'; if(window.innerWidth>1024) sb.classList.remove('active'); }
+      const main=document.querySelector('.main-content');
+      if(main){ main.style.display='block'; main.style.visibility='visible'; main.style.opacity='1'; }
+    }else{
+      closeGraphiteSidebar();
+    }
+    const toggle=$('pmMobileSidebarToggle');
+    if(toggle) toggle.style.display = active ? '' : 'none';
+    if(window.innerWidth>1024) closeGraphiteSidebar();
+  }
+
+  function refineVisualDetails(){
+    // Elimina texto promocional de intentos previos si quedó cacheado.
+    const bad=/ProManage\s+OS\s+Upgrade|Control total para proyectos reales|Dashboard ejecutivo, finanzas, evidencias|experiencia premium optimizada/i;
+    $$('body *').slice(0,220).forEach(el=>{
+      if(el.children.length===0 && bad.test(el.textContent||'')) el.remove();
+    });
+    // Marca sobria en login/empresa sin textos extras.
+    $$('.login-card,.company-picker-card').forEach(card=>{
+      if(!card.querySelector('.pm-premium-mark')){
+        const mark=document.createElement('div');
+        mark.className='pm-premium-mark';
+        card.insertBefore(mark,card.firstElementChild||null);
+      }
+    });
+    // Iconos discretos de menú si faltan.
+    const iconMap={dash:'⌂',intelligence:'✦',projects:'▦',team:'◇',employees:'◌',clients:'◎',finances:'Q',inventory:'□',reports:'◫'};
+    $$('.sidebar .menu-item').forEach(item=>{
+      if(!item.querySelector('.pm-menu-icon')){
+        const key=(item.id||'').replace('menu-','');
+        const ico=document.createElement('span'); ico.className='pm-menu-icon'; ico.textContent=iconMap[key]||'•';
+        item.insertBefore(ico,item.firstChild);
+      }
+    });
+    const sidebar=$('sidebar');
+    if(sidebar && !sidebar.querySelector('.pm-sidebar-foot')){
+      const foot=document.createElement('div');
+      foot.className='pm-sidebar-foot';
+      foot.innerHTML='<strong>Sistema activo</strong><span>ProManage local</span>';
+      sidebar.appendChild(foot);
+    }
+  }
+  function addMotion(){
+    if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    $$('.stat-card,.panel,.project-card,.kanban-column,.media-item-card').slice(0,100).forEach((el,i)=>{
+      if(!el.dataset.pmGraphiteReveal){
+        el.dataset.pmGraphiteReveal='1';
+        el.style.animationDelay=Math.min(i*.018,.24)+'s';
+        el.classList.add('pm-reveal');
+      }
+    });
+  }
+  function boot(){
+    applyGraphiteTheme(localStorage.getItem('pm_theme') || localStorage.getItem('theme') || document.documentElement.getAttribute('data-theme') || 'dark');
+    refineVisualDetails();
+    syncGraphiteLayout(true);
+    addMotion();
+  }
+
+  function wrapAction(name){
+    const original=window[name];
+    if(typeof original !== 'function' || original.__pmGraphiteV3) return;
+    const wrapped=function(){
+      const out=original.apply(this,arguments);
+      setTimeout(()=>raf2(boot),40);
+      setTimeout(()=>raf2(boot),180);
+      setTimeout(()=>raf2(boot),420);
+      return out;
+    };
+    wrapped.__pmGraphiteV3=true;
+    window[name]=wrapped;
+  }
+  ['handleAuth','toggleAuthMode','submitCreateCompany','selectCompany','openCompanyPicker','logout','switchSection','toggleUserDropdown','toggleSmartAssistant','renderDashboard','renderProjects','renderFinances','renderInventory'].forEach(wrapAction);
+
+  ['DOMContentLoaded','load','pageshow','resize','orientationchange'].forEach(evt=>window.addEventListener(evt,()=>setTimeout(()=>raf2(boot),evt==='resize'?60:20),{passive:true}));
+  document.addEventListener('click',ev=>{
+    if(ev.target && ev.target.closest && ev.target.closest('.sidebar .menu-item') && window.innerWidth<=1024){ setTimeout(closeGraphiteSidebar,120); }
+    setTimeout(()=>raf2(boot),90);
+  },true);
+  document.addEventListener('change',()=>setTimeout(()=>raf2(boot),90),true);
+  document.addEventListener('input',()=>setTimeout(()=>raf2(boot),90),true);
+  setInterval(()=>syncGraphiteLayout(false),1200);
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot,{once:true}); else boot();
 })();
