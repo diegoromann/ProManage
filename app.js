@@ -5026,3 +5026,139 @@ setTimeout(injectSystemHealth,900); setInterval(()=>{ if(document.body.classList
   window.addEventListener('resize', function(){ refreshLayoutState(); }, {passive:true});
   if(MOBILE.addEventListener) MOBILE.addEventListener('change', refreshLayoutState);
 })();
+
+
+/* =========================================================
+   PROMANAGE HOTFIX FINAL - sidebar móvil real + ficha 360 por proyecto
+   ========================================================= */
+(function(){
+  'use strict';
+  var MOBILE = window.matchMedia ? window.matchMedia('(max-width: 1024px)') : {matches:false, addEventListener:function(){}};
+  function $(id){ return document.getElementById(id); }
+  function esc(v){ return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c];}); }
+  function readJSON(key, fallback){ try{ var raw=localStorage.getItem(key); return raw?JSON.parse(raw):fallback; }catch(e){ return fallback; } }
+  function arr(key){ var v=readJSON(key,[]); return Array.isArray(v)?v:[]; }
+  function currentCompany(){ try{ if(typeof selectedCompanyId !== 'undefined' && selectedCompanyId) return String(selectedCompanyId); }catch(e){} return String(localStorage.getItem('pm_selectedCompanyId')||''); }
+  function currentTheme(){ return (localStorage.getItem('pm_theme') || localStorage.getItem('theme') || document.documentElement.getAttribute('data-theme') || 'dark') === 'light' ? 'light':'dark'; }
+  function syncThemeFinal(){ var t=currentTheme(); document.documentElement.setAttribute('data-theme',t); if(document.body) document.body.setAttribute('data-theme',t); var meta=document.querySelector('meta[name="theme-color"]'); if(meta) meta.setAttribute('content', t==='light'?'#eef5fb':'#020611'); }
+  function dashboardVisible(){ var d=$('dashboardWrapper'); if(!d) return false; if(String(d.style.display||'').toLowerCase()==='none') return false; try{return getComputedStyle(d).display!=='none';}catch(e){return true;} }
+  function ensureSidebarControls(){
+    var btn=$('pmMobileSidebarToggle');
+    if(!btn){ btn=document.createElement('button'); btn.id='pmMobileSidebarToggle'; btn.type='button'; document.body.appendChild(btn); }
+    btn.className='pm-mobile-sidebar-toggle';
+    btn.setAttribute('aria-label','Abrir menú principal');
+    btn.innerHTML='<span class="pm-bars" aria-hidden="true"></span><span>Menú</span>';
+    btn.onclick=function(ev){ ev.preventDefault(); ev.stopPropagation(); toggleMobileSidebar(); return false; };
+    var bd=$('pmMobileSidebarBackdrop');
+    if(!bd){ bd=document.createElement('div'); bd.id='pmMobileSidebarBackdrop'; document.body.appendChild(bd); }
+    bd.className='pm-mobile-sidebar-backdrop';
+    bd.onclick=function(ev){ ev.preventDefault(); closeMobileSidebar(); };
+  }
+  function openMobileSidebar(){
+    ensureSidebarControls(); if(!dashboardVisible()) return;
+    var side=$('sidebar'), bd=$('pmMobileSidebarBackdrop'), btn=$('pmMobileSidebarToggle');
+    document.body.classList.add('pm-dashboard-active','pm-sidebar-open');
+    if(side){ side.classList.add('active'); side.style.transform='translate3d(0,0,0)'; side.style.visibility='visible'; side.style.opacity='1'; }
+    if(bd) bd.classList.add('active');
+    if(btn) btn.setAttribute('aria-expanded','true');
+  }
+  function closeMobileSidebar(){
+    var side=$('sidebar'), bd=$('pmMobileSidebarBackdrop'), btn=$('pmMobileSidebarToggle');
+    document.body.classList.remove('pm-sidebar-open');
+    if(side){ side.classList.remove('active'); side.style.transform=''; side.style.visibility=''; side.style.opacity=''; }
+    if(bd) bd.classList.remove('active');
+    if(btn) btn.setAttribute('aria-expanded','false');
+  }
+  function toggleMobileSidebar(){ document.body.classList.contains('pm-sidebar-open') ? closeMobileSidebar() : openMobileSidebar(); }
+  function refreshResponsive(){
+    ensureSidebarControls(); syncThemeFinal();
+    var visible=dashboardVisible();
+    document.body.classList.toggle('pm-dashboard-active',visible);
+    document.body.classList.toggle('pm-mobile-layout',visible && MOBILE.matches);
+    if(!visible || !MOBILE.matches) closeMobileSidebar();
+  }
+  window.openMobileSidebar=openMobileSidebar; window.closeMobileSidebar=closeMobileSidebar;
+  window.toggleSidebar=function(force){ if(force===true) return openMobileSidebar(); if(force===false) return closeMobileSidebar(); return toggleMobileSidebar(); };
+  document.addEventListener('click',function(ev){
+    var t=ev.target;
+    if(t && t.closest && t.closest('#pmMobileSidebarToggle')){ ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation(); toggleMobileSidebar(); return; }
+    if(t && t.closest && t.closest('#pmMobileSidebarBackdrop')){ ev.preventDefault(); closeMobileSidebar(); return; }
+    if(MOBILE.matches && t && t.closest && t.closest('#sidebar .menu-item')) setTimeout(closeMobileSidebar,140);
+  },true);
+
+  /* Ficha completa 360: solo el proyecto seleccionado y su información relacionada */
+  function projectList(){ try{ if(typeof projects!=='undefined' && Array.isArray(projects)) return projects; }catch(e){} return arr('pm_projects'); }
+  function memberList(){ try{ if(typeof members!=='undefined' && Array.isArray(members)) return members; }catch(e){} return arr('pm_members'); }
+  function financeList(){ try{ if(typeof finances!=='undefined' && Array.isArray(finances)) return finances; }catch(e){} return arr('pm_finances'); }
+  function logsList(){ try{ if(typeof activityLogs!=='undefined' && Array.isArray(activityLogs)) return activityLogs; }catch(e){} return arr('pm_activityLogs'); }
+  function inventoryList(){ try{ if(typeof inventory!=='undefined' && Array.isArray(inventory)) return inventory; }catch(e){} return arr('pm_inventory'); }
+  function findProject(id){ id=String(id||''); return projectList().find(function(p){return String(p && p.id)===id;}); }
+  function getImages(p){
+    var out=[], seen={}; var pid=String(p && p.id || '');
+    function add(x){ if(!x) return; var src=x.dataUrl||x.url||x.src||x.base64||x.image||x.content||''; if(!/^data:image\//.test(String(src))) return; if(seen[src]) return; seen[src]=true; out.push({src:src,name:x.name||x.filename||x.title||'Imagen'}); }
+    function list(a){ if(Array.isArray(a)) a.forEach(add); }
+    try{ if(typeof window.getProjectImages==='function') list(window.getProjectImages(pid)); }catch(e){}
+    ['images','gallery','media','attachments','files','evidence','evidences'].forEach(function(k){ list(p && p[k]); });
+    ['pm_projectImages','pm_project_images','pm_projectsImages','pm_gallery','pm_media','pm_attachments'].forEach(function(k){
+      var d=readJSON(k,null); if(!d) return; if(Array.isArray(d)) list(d.filter(function(x){return String((x&&x.projectId)||(x&&x.project)||(x&&x.parentId)||'')===pid;})); else list(d[pid]);
+    });
+    return out;
+  }
+  function relatedText(row){ return String([row.projectId,row.project,row.projectTitle,row.category,row.concept,row.description,row.name,row.title,row.m].filter(Boolean).join(' ')).toLowerCase(); }
+  function relatedFinances(p){ var pid=String(p.id), title=String(p.title||p.name||'').toLowerCase(); return financeList().filter(function(f){ if(String(f.companyId||'')!==currentCompany()) return false; return String(f.projectId||'')===pid || (title && relatedText(f).indexOf(title)>-1); }); }
+  function relatedLogs(p){ var pid=String(p.id), title=String(p.title||p.name||'').toLowerCase(); return logsList().filter(function(l){ var s=relatedText(l); return s.indexOf(pid.toLowerCase())>-1 || (title && s.indexOf(title)>-1); }).slice(0,12); }
+  function relatedInventory(p){ var pid=String(p.id), title=String(p.title||p.name||'').toLowerCase(); return inventoryList().filter(function(i){ if(String(i.companyId||'')!==currentCompany()) return false; return String(i.projectId||'')===pid || (title && relatedText(i).indexOf(title)>-1); }).slice(0,10); }
+  function money(n){ n=Number(n||0); return 'Q '+n.toLocaleString('es-GT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function ensure360Modal(){
+    var m=$('pmProject360Modal'); if(m) return m;
+    m=document.createElement('div'); m.id='pmProject360Modal'; m.className='pm-project360-modal';
+    m.innerHTML='<div class="pm-project360-card"><button class="pm-project360-close" type="button" aria-label="Cerrar">×</button><div id="pmProject360Content"></div></div>';
+    document.body.appendChild(m);
+    m.addEventListener('click',function(e){ if(e.target===m || (e.target.closest && e.target.closest('.pm-project360-close'))) closeProject360(); });
+    return m;
+  }
+  function closeProject360(){ var m=$('pmProject360Modal'); if(m) m.classList.remove('active'); }
+  window.closeProject360=closeProject360;
+  window.openProject360=function(id){
+    var p=findProject(id); if(!p){ alert('Proyecto no encontrado.'); return; }
+    var owner=memberList().find(function(m){return String(m.id)===String(p.ownerId);});
+    var imgs=getImages(p), fins=relatedFinances(p), logs=relatedLogs(p), inv=relatedInventory(p);
+    var ingresos=0, egresos=0; fins.forEach(function(f){ var a=Number(f.amount||f.net||0); if(String(f.type).toLowerCase()==='egreso') egresos+=a; else ingresos+=a; });
+    var attachCount=(Array.isArray(p.attachments)?p.attachments.length:0)+imgs.length;
+    var gallery=imgs.length?imgs.map(function(i){return '<img src="'+i.src+'" alt="'+esc(i.name)+'">';}).join(''):'<div class="pm360-empty">Este proyecto aún no tiene imágenes vinculadas.</div>';
+    var finRows=fins.length?fins.map(function(f){return '<div class="pm360-row"><div><strong>'+esc(f.category||f.concept||'Movimiento')+'</strong><br><small>'+esc(f.date||'Sin fecha')+'</small></div><strong>'+esc(String(f.type||''))+' · '+money(f.amount||f.net||0)+'</strong></div>';}).join(''):'<div class="pm360-empty">No hay movimientos financieros vinculados únicamente a este proyecto.</div>';
+    var logRows=logs.length?logs.map(function(l){return '<div class="pm360-row"><div><strong>'+esc(l.m||l.message||'Actividad')+'</strong></div><small>'+esc(l.t||l.date||'')+'</small></div>';}).join(''):'<div class="pm360-empty">No hay actividad específica registrada para este proyecto.</div>';
+    var invRows=inv.length?inv.map(function(i){return '<div class="pm360-row"><div><strong>'+esc(i.product||i.name||'Insumo')+'</strong><br><small>'+esc(i.category||'Inventario')+'</small></div><strong>'+esc(i.stock||i.qty||0)+' uds.</strong></div>';}).join(''):'<div class="pm360-empty">No hay inventario vinculado directamente a este proyecto.</div>';
+    ensure360Modal();
+    $('pmProject360Content').innerHTML='<section class="pm-project360-hero"><div class="pm-project360-kicker">Ficha completa del proyecto</div><h2>'+esc(p.title||p.name||'Proyecto')+'</h2><p>'+esc(p.description||p.desc||'Sin descripción registrada.')+'</p><div class="pm360-actions"><button class="btn-primary" onclick="generateSingleProjectPDF && (document.getElementById(\'reportProjectSelect\')&&(document.getElementById(\'reportProjectSelect\').value=\''+esc(p.id)+'\'),generateSingleProjectPDF())">Generar PDF</button><button class="btn-secondary" onclick="openProjectDetailsModal(\''+esc(p.id)+'\')">Abrir galería</button></div></section><section class="pm-project360-grid"><div class="pm360-kpi"><span>Estado</span><strong>'+esc(p.status||'No definido')+'</strong></div><div class="pm360-kpi"><span>Prioridad</span><strong>'+esc(p.priority||'No definida')+'</strong></div><div class="pm360-kpi"><span>Responsable</span><strong>'+esc((owner&&owner.name)||'Sin asignación')+'</strong></div><div class="pm360-kpi"><span>Evidencias</span><strong>'+attachCount+'</strong></div><div class="pm360-kpi"><span>Ingresos</span><strong>'+money(ingresos)+'</strong></div><div class="pm360-kpi"><span>Egresos</span><strong>'+money(egresos)+'</strong></div><div class="pm360-kpi"><span>Balance</span><strong>'+money(ingresos-egresos)+'</strong></div><div class="pm360-kpi"><span>ID</span><strong style="font-size:13px">'+esc(p.id)+'</strong></div></section><section class="pm-project360-sections"><div class="pm360-section"><h3>Galería vinculada</h3><div class="pm360-gallery">'+gallery+'</div></div><div class="pm360-section"><h3>Finanzas de este proyecto</h3><div class="pm360-list">'+finRows+'</div></div><div class="pm360-section"><h3>Actividad / Bitácora</h3><div class="pm360-list">'+logRows+'</div></div><div class="pm360-section"><h3>Inventario vinculado</h3><div class="pm360-list">'+invRows+'</div></div></section>';
+    $('pmProject360Modal').classList.add('active');
+  };
+  function inject360Buttons(){
+    document.querySelectorAll('.project-card').forEach(function(card){
+      if(card.querySelector('.pm360-open-btn')) return;
+      var id=''; var h=card.querySelector('[onclick*="openProjectDetailsModal"]');
+      var m=h && String(h.getAttribute('onclick')||'').match(/openProjectDetailsModal\('([^']+)'\)/); if(m) id=m[1];
+      if(!id) return;
+      var zone=card.querySelector('.project-info')||card;
+      var b=document.createElement('button'); b.className='action-text-btn pm360-open-btn'; b.type='button'; b.textContent='Ficha 360'; b.onclick=function(e){e.stopPropagation(); window.openProject360(id);}; zone.appendChild(b);
+    });
+    document.querySelectorAll('#projectsListTableBody tr').forEach(function(row){
+      if(row.querySelector('.pm360-open-btn')) return;
+      var edit=row.querySelector('[onclick*="openEditProjectModal"]'); var m=edit && String(edit.getAttribute('onclick')||'').match(/openEditProjectModal\('([^']+)'\)/); if(!m) return;
+      var td=row.querySelector('td:last-child'); if(!td) return;
+      var b=document.createElement('button'); b.className='action-text-btn pm360-open-btn'; b.type='button'; b.textContent='Ficha 360'; b.onclick=function(e){e.stopPropagation(); window.openProject360(m[1]);}; td.insertBefore(b, td.firstChild);
+    });
+    var details=$('projectDetailsModal');
+    if(details && !details.querySelector('.pm360-detail-btn')){
+      var save=$('btnSaveMultimedia');
+      if(save && save.parentElement){ var b=document.createElement('button'); b.className='btn-secondary pm360-detail-btn'; b.type='button'; b.style.flex='1'; b.style.padding='14px'; b.textContent='Ficha 360'; b.onclick=function(){ try{ window.openProject360(selectedDetailProjectId); }catch(e){} }; save.parentElement.appendChild(b); }
+    }
+  }
+  function wrapRender(){ var old=window.renderProjectsHub; if(typeof old==='function' && !old.__pm360Wrapped){ var fn=function(){ var r=old.apply(this,arguments); setTimeout(inject360Buttons,30); return r; }; fn.__pm360Wrapped=true; window.renderProjectsHub=fn; try{ renderProjectsHub=fn; }catch(e){} } }
+  function wrapTheme(){ var old=window.toggleTheme; if(typeof old==='function' && !old.__pmFinalTheme){ var fn=function(){ var r=old.apply(this,arguments); setTimeout(syncThemeFinal,0); setTimeout(syncThemeFinal,90); return r; }; fn.__pmFinalTheme=true; window.toggleTheme=fn; try{ toggleTheme=fn; }catch(e){} } }
+  function init(){ ensureSidebarControls(); refreshResponsive(); wrapRender(); wrapTheme(); ensure360Modal(); inject360Buttons(); setTimeout(function(){ refreshResponsive(); inject360Buttons(); },250); setTimeout(function(){ refreshResponsive(); inject360Buttons(); },900); }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init,{once:true}); else init();
+  window.addEventListener('resize',refreshResponsive,{passive:true});
+  window.addEventListener('orientationchange',function(){setTimeout(refreshResponsive,180);},{passive:true});
+  if(MOBILE.addEventListener) MOBILE.addEventListener('change',refreshResponsive);
+})();
