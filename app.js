@@ -4416,7 +4416,7 @@ if(typeof oldSwitch==='function') window.switchSection=function(section){ const 
 function installManifest(){
   try{
     if(document.querySelector('link[rel="manifest"]')) return;
-    const manifest={name:'ProManage',short_name:'ProManage',start_url:'./index.html',display:'standalone',background_color:'#050505',theme_color:'#c9a86a',description:'Gestión local de proyectos, finanzas, inventario y reportes.',icons:[{src:'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"%3E%3Crect width="512" height="512" rx="112" fill="%23050505"/%3E%3Cpath d="M126 322V150h155c67 0 109 34 109 88s-42 87-109 87h-69v37h-86Zm86-105h63c18 0 29-9 29-23s-11-23-29-23h-63v46Z" fill="%23c9a86a"/%3E%3Cpath d="M126 385h260v-55H126v55Z" fill="%23f1dfad"/%3E%3C/svg%3E',sizes:'512x512',type:'image/svg+xml'}]};
+    const manifest={name:'ProManage',short_name:'ProManage',start_url:'./index.html',display:'standalone',background_color:'#020617',theme_color:'#0f6fe8',description:'Gestión local de proyectos, finanzas, inventario y reportes.',icons:[{src:'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"%3E%3Crect width="512" height="512" rx="112" fill="%23020617"/%3E%3Cpath d="M126 322V150h155c67 0 109 34 109 88s-42 87-109 87h-69v37h-86Zm86-105h63c18 0 29-9 29-23s-11-23-29-23h-63v46Z" fill="%232f8cff"/%3E%3Cpath d="M126 385h260v-55H126v55Z" fill="%237dd3fc"/%3E%3C/svg%3E',sizes:'512x512',type:'image/svg+xml'}]};
     const link=document.createElement('link'); link.rel='manifest'; link.href='data:application/manifest+json,'+encodeURIComponent(JSON.stringify(manifest)); document.head.appendChild(link);
   }catch(e){}
 }
@@ -4527,554 +4527,170 @@ function injectSystemHealth(){
 setTimeout(injectSystemHealth,900); setInterval(()=>{ if(document.body.classList.contains('pm-dashboard-active')) injectSystemHealth(); },5000);
 })();
 
-
 /* =========================================================
-   PREMIUM STABILITY + RESPONSIVE DRAWER CONTROLLER
+   PROMANAGE RESPONSIVE/DESIGN STABILITY PATCH - 2026-05-31
+   Drawer móvil real, escritorio estable y tema claro sincronizado.
    ========================================================= */
 (function(){
   'use strict';
-  const $ = id => document.getElementById(id);
-  const qs = sel => document.querySelector(sel);
-  function visible(el){
-    if(!el) return false;
-    const inline=(el.style.display||'').trim().toLowerCase();
-    if(inline && inline !== 'none') return true;
-    try{return getComputedStyle(el).display !== 'none' && el.offsetParent !== null;}catch(e){return false;}
-  }
-  function isDashboardActive(){
-    const dash=$('dashboardWrapper'), auth=$('authWrapper'), picker=$('companyPickerWrapper');
+  const MOBILE_QUERY = window.matchMedia('(max-width: 1024px)');
+  const $ = (id) => document.getElementById(id);
+
+  function dashboardIsVisible(){
+    const dash = $('dashboardWrapper');
     if(!dash) return false;
-    const dashDisplay=(dash.style.display||'').replace(/\s/g,'').toLowerCase();
-    const authHidden=!auth || (auth.style.display||'').replace(/\s/g,'').toLowerCase()==='none' || getComputedStyle(auth).display==='none';
-    const pickerHidden=!picker || (picker.style.display||'').replace(/\s/g,'').toLowerCase()==='none' || getComputedStyle(picker).display==='none';
-    return dashDisplay !== 'none' && authHidden && pickerHidden;
+    const inline = String(dash.getAttribute('style') || '').replace(/\s/g,'').toLowerCase();
+    if(inline.includes('display:none')) return false;
+    try { return getComputedStyle(dash).display !== 'none'; } catch(e) { return dash.style.display !== 'none'; }
   }
-  function closeMobileSidebar(){
-    $('sidebar')?.classList.remove('active');
-    $('pmMobileSidebarBackdrop')?.classList.remove('active');
-    document.body.classList.remove('pm-mobile-sidebar-open');
+
+  function syncThemeEverywhere(){
+    const theme = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+    document.body.setAttribute('data-theme', theme);
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if(meta) meta.setAttribute('content', theme === 'light' ? '#f5f8fc' : '#020617');
   }
-  function toggleMobileSidebar(){
-    const side=$('sidebar'); if(!side) return;
-    const open=!side.classList.contains('active');
-    side.classList.toggle('active', open);
-    $('pmMobileSidebarBackdrop')?.classList.toggle('active', open);
-    document.body.classList.toggle('pm-mobile-sidebar-open', open);
-  }
-  function ensureDrawerControls(){
-    if(!$('pmMobileSidebarToggle')){
-      const b=document.createElement('button');
-      b.id='pmMobileSidebarToggle';
-      b.className='pm-mobile-sidebar-toggle';
-      b.type='button';
-      b.setAttribute('aria-label','Abrir menú');
-      b.innerHTML='<i aria-hidden="true"></i><span>Menú</span>';
-      b.addEventListener('click', toggleMobileSidebar);
-      document.body.appendChild(b);
+
+  function syncLayoutState(){
+    const visible = dashboardIsVisible();
+    document.body.classList.toggle('pm-dashboard-active', visible);
+    document.body.classList.toggle('pm-mobile-layout', visible && MOBILE_QUERY.matches);
+    if(!visible) closeSidebar();
+    if(!MOBILE_QUERY.matches){
+      document.body.classList.remove('pm-sidebar-open');
+      const bd = $('pmMobileSidebarBackdrop');
+      if(bd) bd.classList.remove('active');
     }
-    if(!$('pmMobileSidebarBackdrop')){
-      const bg=document.createElement('div');
-      bg.id='pmMobileSidebarBackdrop';
-      bg.className='pm-mobile-sidebar-backdrop';
-      bg.addEventListener('click', closeMobileSidebar);
-      document.body.appendChild(bg);
-    }
-  }
-  function syncPremiumLayout(){
-    const dash=$('dashboardWrapper'), auth=$('authWrapper'), picker=$('companyPickerWrapper'), splash=$('pmSplash'), loader=$('pmLoader');
-    ensureDrawerControls();
-    const active=isDashboardActive();
-    document.body.classList.toggle('pm-dashboard-active', active);
-    document.body.classList.toggle('pm-auth-active', !active && visible(auth));
-    document.body.classList.toggle('pm-picker-active', !active && visible(picker));
-    const toggle=$('pmMobileSidebarToggle'), bg=$('pmMobileSidebarBackdrop');
-    if(toggle) toggle.style.display = active ? '' : 'none';
-    if(!active){ closeMobileSidebar(); }
-    if(active){
-      if(dash && (dash.style.display||'').toLowerCase()==='none') dash.style.display='flex';
-      if(auth) auth.style.display='none';
-      if(picker) picker.style.display='none';
-      [splash, loader].forEach(el=>{ if(el){ el.classList.add('hidden'); el.style.display='none'; el.style.opacity='0'; el.style.visibility='hidden'; el.style.pointerEvents='none'; }});
-    }
-    if(window.innerWidth > 1024){
-      closeMobileSidebar();
-      if(active && $('sidebar')) $('sidebar').classList.remove('active');
-    }
-  }
-  ['load','resize','orientationchange','pageshow'].forEach(evt=>window.addEventListener(evt,()=>setTimeout(syncPremiumLayout,50),{passive:true}));
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',()=>setTimeout(syncPremiumLayout,50),{once:true}); else setTimeout(syncPremiumLayout,50);
-  document.addEventListener('click',e=>{
-    if(e.target && e.target.closest && e.target.closest('.sidebar .menu-item') && window.innerWidth <= 1024){ setTimeout(closeMobileSidebar,120); }
-    setTimeout(syncPremiumLayout,80);
-  },true);
-  document.addEventListener('change',()=>setTimeout(syncPremiumLayout,80),true);
-  document.addEventListener('input',()=>setTimeout(syncPremiumLayout,80),true);
-  setInterval(syncPremiumLayout,900);
-
-  function wrap(name, after){
-    const old=window[name];
-    if(typeof old !== 'function') return;
-    if(old.__pmPremiumWrapped) return;
-    const fn=function(){
-      const result=old.apply(this,arguments);
-      setTimeout(after||syncPremiumLayout,80);
-      setTimeout(after||syncPremiumLayout,260);
-      return result;
-    };
-    fn.__pmPremiumWrapped=true;
-    window[name]=fn;
-  }
-  ['handleAuth','submitCreateCompany','selectCompany','openCompanyPicker','logout','switchSection','toggleUserDropdown'].forEach(n=>wrap(n,syncPremiumLayout));
-
-  window.toggleProManageMobileMenu=toggleMobileSidebar;
-  window.closeProManageMobileMenu=closeMobileSidebar;
-
-  function addRefinedMotion(){
-    if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const cards=[...document.querySelectorAll('.stat-card,.panel,.project-card,.kanban-column')].slice(0,80);
-    cards.forEach(card=>{
-      if(card.dataset.pmTiltReady) return;
-      card.dataset.pmTiltReady='1';
-      card.addEventListener('mousemove',ev=>{
-        const r=card.getBoundingClientRect();
-        const x=((ev.clientX-r.left)/r.width-.5)*4;
-        const y=((ev.clientY-r.top)/r.height-.5)*-4;
-        card.style.transform=`translateY(-4px) perspective(900px) rotateX(${y}deg) rotateY(${x}deg)`;
-      });
-      card.addEventListener('mouseleave',()=>{card.style.transform='';});
-    });
-  }
-  setTimeout(addRefinedMotion,700);
-  setInterval(addRefinedMotion,3000);
-
-  function cleanBadUpgradeCopy(){
-    // Removes any previous experimental marketing copy if an older cache/script left it behind.
-    const bad=$('pmOsLoginShowcase');
-    if(bad) bad.remove();
-    [...document.querySelectorAll('*')].slice(0,80).forEach(el=>{
-      if(el.childNodes && el.childNodes.length===1 && el.textContent && /ProManage\s+OS\s+Upgrade|Control total para proyectos reales|Dashboard ejecutivo, finanzas/i.test(el.textContent)) el.remove();
-    });
-  }
-  setTimeout(cleanBadUpgradeCopy,120);
-  setInterval(cleanBadUpgradeCopy,1500);
-})();
-
-/* ==========================================================
-   ProManage Premium Runtime V2
-   UI polish, responsive stability, animated mark, mobile drawer.
-   Does not remove or replace existing business functions.
-   ========================================================== */
-(function(){
-  'use strict';
-  const $ = (id)=>document.getElementById(id);
-  const $$ = (sel,root=document)=>Array.from(root.querySelectorAll(sel));
-  const raf = (fn)=>requestAnimationFrame(()=>requestAnimationFrame(fn));
-
-  function premiumState(){
-    const dash=$('dashboardWrapper'), auth=$('authWrapper'), picker=$('companyPickerWrapper');
-    const dashboardVisible=!!(dash && getComputedStyle(dash).display!=='none');
-    document.body.classList.toggle('pm-dashboard-active', dashboardVisible);
-    document.body.classList.toggle('pm-auth-active', !!(auth && getComputedStyle(auth).display!=='none'));
-    document.body.classList.toggle('pm-picker-active', !!(picker && getComputedStyle(picker).display!=='none'));
-    if(dashboardVisible){
-      ['pmSplash','pmLoader'].forEach(id=>{const el=$(id); if(el){el.classList.add('hidden'); el.style.display='none'; el.style.opacity='0'; el.style.visibility='hidden';}});
-    }
-    if(window.innerWidth>1024){
-      const sb=$('sidebar'); if(sb) sb.classList.remove('active');
-      const bd=$('pmMobileSidebarBackdrop'); if(bd) bd.classList.remove('active');
-    }
-  }
-
-  function ensureOrbs(){
-    if(document.querySelector('.pm-premium-orb-layer')) return;
-    const layer=document.createElement('div');
-    layer.className='pm-premium-orb-layer';
-    layer.innerHTML='<span class="pm-premium-orb"></span><span class="pm-premium-orb"></span><span class="pm-premium-orb"></span>';
-    document.body.prepend(layer);
-  }
-
-  function ensureLoginMark(){
-    $$('.login-card,.company-picker-card').forEach(card=>{
-      if(card.querySelector('.pm-premium-mark')) return;
-      const mark=document.createElement('div');
-      mark.className='pm-premium-mark';
-      const first=card.firstElementChild;
-      card.insertBefore(mark, first || null);
-    });
-  }
-
-  const iconMap={
-    dash:'⌂',intelligence:'✦',projects:'▦',team:'◇',employees:'◌',clients:'◎',finances:'₿',inventory:'□',reports:'◫'
-  };
-  function refineSidebar(){
-    const brand=document.querySelector('.brand-info');
-    if(brand && !brand.querySelector('.pm-sidebar-logo')){
-      const dot=brand.querySelector('.sidebar-brand-dot');
-      const logo=document.createElement('span');
-      logo.className='pm-sidebar-logo';
-      brand.insertBefore(logo, dot || brand.firstChild);
-    }
-    $$('.sidebar .menu-item').forEach(item=>{
-      if(item.querySelector('.pm-menu-icon')) return;
-      const key=(item.id||'').replace('menu-','');
-      const ico=document.createElement('span');
-      ico.className='pm-menu-icon';
-      ico.textContent=iconMap[key] || '•';
-      item.insertBefore(ico,item.firstChild);
-    });
-    const sidebar=$('sidebar');
-    if(sidebar && !sidebar.querySelector('.pm-sidebar-foot')){
-      const foot=document.createElement('div');
-      foot.className='pm-sidebar-foot';
-      foot.innerHTML='<strong>Sistema activo</strong><span>Datos locales protegidos</span>';
-      sidebar.appendChild(foot);
-    }
+    syncThemeEverywhere();
   }
 
   function ensureMobileControls(){
-    if(!$('pmMobileSidebarBackdrop')){
-      const bd=document.createElement('div');
-      bd.id='pmMobileSidebarBackdrop';
-      bd.className='pm-mobile-sidebar-backdrop';
-      bd.addEventListener('click',closeMobileSidebar,{passive:true});
-      document.body.appendChild(bd);
-    }
     if(!$('pmMobileSidebarToggle')){
-      const btn=document.createElement('button');
-      btn.id='pmMobileSidebarToggle';
-      btn.className='pm-mobile-sidebar-toggle';
-      btn.type='button';
-      btn.setAttribute('aria-label','Abrir menú');
-      btn.innerHTML='<i aria-hidden="true"></i><span>Menú</span>';
-      btn.addEventListener('click',toggleMobileSidebar);
+      const btn = document.createElement('button');
+      btn.id = 'pmMobileSidebarToggle';
+      btn.className = 'pm-mobile-sidebar-toggle';
+      btn.type = 'button';
+      btn.setAttribute('aria-label','Abrir menú principal');
+      btn.setAttribute('aria-expanded','false');
+      btn.innerHTML = '<span class="pm-bars" aria-hidden="true"></span><span>Menú</span>';
+      btn.addEventListener('click', function(ev){ ev.preventDefault(); ev.stopPropagation(); toggleSidebar(); });
       document.body.appendChild(btn);
     }
-  }
-  function toggleMobileSidebar(){
-    if(window.innerWidth>1024) return;
-    const sb=$('sidebar'), bd=$('pmMobileSidebarBackdrop');
-    if(!sb) return;
-    const active=!sb.classList.contains('active');
-    sb.classList.toggle('active',active);
-    if(bd) bd.classList.toggle('active',active);
-    const btn=$('pmMobileSidebarToggle');
-    if(btn) btn.setAttribute('aria-label', active?'Cerrar menú':'Abrir menú');
-  }
-  function closeMobileSidebar(){
-    const sb=$('sidebar'), bd=$('pmMobileSidebarBackdrop');
-    if(sb) sb.classList.remove('active');
-    if(bd) bd.classList.remove('active');
-  }
-  window.toggleProManageMobileMenu=toggleMobileSidebar;
-  window.closeProManageMobileMenu=closeMobileSidebar;
-
-  function revealVisible(){
-    const els=$$('.stat-card,.panel,.project-card,.kanban-column,.table-responsive,.content-header').filter(el=>!el.dataset.pmRevealed);
-    const vh=window.innerHeight||800;
-    els.slice(0,80).forEach((el,i)=>{
-      const r=el.getBoundingClientRect();
-      if(r.top<vh+120){
-        el.dataset.pmRevealed='1';
-        el.classList.add('pm-reveal');
-        el.style.animationDelay=Math.min(i*0.025,.25)+'s';
-      }
-    });
-  }
-
-  function addRipples(){
-    $$('button,.menu-item,.company-item-btn,.view-tab-btn,.filter-btn').forEach(el=>{
-      if(el.dataset.pmRippleReady) return;
-      el.dataset.pmRippleReady='1';
-      el.addEventListener('click',ev=>{
-        const style=getComputedStyle(el);
-        if(style.position==='static') el.style.position='relative';
-        el.style.overflow='hidden';
-        const r=el.getBoundingClientRect();
-        const s=document.createElement('span');
-        s.className='pm-premium-ripple';
-        s.style.left=(ev.clientX-r.left)+'px';
-        s.style.top=(ev.clientY-r.top)+'px';
-        el.appendChild(s);
-        setTimeout(()=>s.remove(),780);
-      },{passive:true});
-    });
-  }
-
-  function animateCounters(){
-    $$('.stat-card .value').forEach(el=>{
-      const text=(el.textContent||'').trim();
-      if(el.dataset.pmLastValue===text) return;
-      el.dataset.pmLastValue=text;
-      el.classList.remove('pm-counter-flash');
-      void el.offsetWidth;
-      el.classList.add('pm-counter-flash');
-    });
-  }
-
-  function premiumTilt(){
-    if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    $$('.stat-card,.panel,.project-card,.kanban-column,.company-item-btn').slice(0,110).forEach(card=>{
-      if(card.dataset.pmTiltV2) return;
-      card.dataset.pmTiltV2='1';
-      card.addEventListener('mousemove',ev=>{
-        if(window.innerWidth<1025) return;
-        const r=card.getBoundingClientRect();
-        const x=((ev.clientX-r.left)/Math.max(r.width,1)-.5)*5.5;
-        const y=((ev.clientY-r.top)/Math.max(r.height,1)-.5)*-5.5;
-        card.style.transform=`translateY(-5px) perspective(1100px) rotateX(${y}deg) rotateY(${x}deg)`;
-      },{passive:true});
-      card.addEventListener('mouseleave',()=>{card.style.transform='';},{passive:true});
-    });
-  }
-
-  function cleanGeneratedCopy(){
-    const bad=/ProManage\s+OS\s+Upgrade|Control total para proyectos reales|Dashboard ejecutivo, finanzas, evidencias/i;
-    $$('body *').slice(0,160).forEach(el=>{
-      if(el.children.length===0 && bad.test(el.textContent||'')) el.remove();
-    });
-  }
-
-  function boot(){
-    ensureOrbs();
-    ensureLoginMark();
-    ensureMobileControls();
-    refineSidebar();
-    premiumState();
-    revealVisible();
-    addRipples();
-    animateCounters();
-    premiumTilt();
-    cleanGeneratedCopy();
-  }
-
-  ['load','resize','orientationchange','pageshow'].forEach(evt=>window.addEventListener(evt,()=>raf(boot),{passive:true}));
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',()=>raf(boot),{once:true}); else raf(boot);
-  document.addEventListener('click',ev=>{
-    if(ev.target && ev.target.closest && ev.target.closest('.sidebar .menu-item') && window.innerWidth<=1024){setTimeout(closeMobileSidebar,130)}
-    setTimeout(()=>raf(boot),120);
-  },true);
-  document.addEventListener('input',()=>setTimeout(()=>raf(boot),120),true);
-  document.addEventListener('change',()=>setTimeout(()=>raf(boot),120),true);
-  setInterval(boot,1600);
-
-  function wrap(name){
-    const original=window[name];
-    if(typeof original!=='function' || original.__pmPremiumV2) return;
-    const wrapped=function(){
-      const out=original.apply(this,arguments);
-      setTimeout(()=>raf(boot),80);
-      setTimeout(()=>raf(boot),280);
-      return out;
-    };
-    wrapped.__pmPremiumV2=true;
-    window[name]=wrapped;
-  }
-  ['handleAuth','toggleAuthMode','submitCreateCompany','selectCompany','openCompanyPicker','logout','switchSection','toggleUserDropdown','toggleSmartAssistant','renderDashboard','renderProjects','renderFinances','renderInventory'].forEach(wrap);
-})();
-
-/* =========================================================
-   PROMANAGE GRAPHITE PREMIUM V3 RUNTIME
-   Tema claro real + layout escritorio/móvil estable + look sin azul/morado.
-   ========================================================= */
-(function(){
-  'use strict';
-  const $ = id => document.getElementById(id);
-  const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
-  const raf2 = fn => requestAnimationFrame(()=>requestAnimationFrame(fn));
-
-  function setThemeMeta(theme){
-    let meta=document.querySelector('meta[name="theme-color"]');
-    if(!meta){ meta=document.createElement('meta'); meta.name='theme-color'; document.head.appendChild(meta); }
-    meta.content = theme === 'light' ? '#f5f1e8' : '#050505';
-  }
-  function applyGraphiteTheme(theme){
-    const safe = theme === 'light' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', safe);
-    if(document.body) document.body.setAttribute('data-theme', safe);
-    try{ localStorage.setItem('pm_theme', safe); localStorage.setItem('theme', safe); }catch(e){}
-    setThemeMeta(safe);
-    const label=$('themeToggleText');
-    if(label) label.textContent = safe === 'dark' ? 'Modo Claro' : 'Modo Oscuro';
-    return safe;
-  }
-  window.applyTheme = applyGraphiteTheme;
-  window.toggleTheme = function(){
-    const current = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
-    applyGraphiteTheme(current === 'light' ? 'dark' : 'light');
-    syncGraphiteLayout(true);
-  };
-
-  function isDisplayNone(el){
-    if(!el) return true;
-    const inline=(el.style.display||'').trim().toLowerCase();
-    if(inline === 'none') return true;
-    try{return getComputedStyle(el).display === 'none';}catch(e){return false;}
-  }
-  function currentCompanyExists(){
-    try{
-      const id=(typeof selectedCompanyId !== 'undefined' && selectedCompanyId) ? selectedCompanyId : localStorage.getItem('pm_selectedCompanyId');
-      if(!id) return false;
-      const list=JSON.parse(localStorage.getItem('pm_companies')||'[]');
-      return Array.isArray(list) && list.some(c=>String(c.id)===String(id));
-    }catch(e){return !!localStorage.getItem('pm_selectedCompanyId');}
-  }
-  function shouldDashboardBeActive(){
-    const dash=$('dashboardWrapper'), auth=$('authWrapper'), picker=$('companyPickerWrapper');
-    if(!dash) return false;
-    const dashInline=(dash.style.display||'').trim().toLowerCase();
-    if(dashInline && dashInline !== 'none') return true;
-    try{ if(getComputedStyle(dash).display !== 'none' && dash.offsetParent !== null) return true; }catch(e){}
-    if(currentCompanyExists() && auth && picker && isDisplayNone(auth) && isDisplayNone(picker)) return true;
-    return false;
-  }
-  function hideLoadingLayers(){
-    ['pmSplash','pmLoader'].forEach(id=>{
-      const el=$(id);
-      if(el){
-        el.classList.add('hidden');
-        el.style.display='none';
-        el.style.opacity='0';
-        el.style.visibility='hidden';
-        el.style.pointerEvents='none';
-      }
-    });
-  }
-  function ensureMobileControls(){
     if(!$('pmMobileSidebarBackdrop')){
-      const bg=document.createElement('div');
-      bg.id='pmMobileSidebarBackdrop';
-      bg.className='pm-mobile-sidebar-backdrop';
-      bg.addEventListener('click',closeGraphiteSidebar,{passive:true});
-      document.body.appendChild(bg);
-    }
-    if(!$('pmMobileSidebarToggle')){
-      const b=document.createElement('button');
-      b.id='pmMobileSidebarToggle';
-      b.className='pm-mobile-sidebar-toggle';
-      b.type='button';
-      b.setAttribute('aria-label','Abrir menú');
-      b.innerHTML='<i aria-hidden="true"></i><span>Menú</span>';
-      b.addEventListener('click',toggleGraphiteSidebar);
-      document.body.appendChild(b);
-    }else if(!$('pmMobileSidebarToggle').querySelector('i')){
-      $('pmMobileSidebarToggle').innerHTML='<i aria-hidden="true"></i><span>Menú</span>';
+      const bd = document.createElement('div');
+      bd.id = 'pmMobileSidebarBackdrop';
+      bd.className = 'pm-mobile-sidebar-backdrop';
+      bd.addEventListener('click', function(){ closeSidebar(); });
+      document.body.appendChild(bd);
     }
   }
-  function closeGraphiteSidebar(){
-    const sb=$('sidebar'), bg=$('pmMobileSidebarBackdrop'), b=$('pmMobileSidebarToggle');
-    if(sb) sb.classList.remove('active');
-    if(bg) bg.classList.remove('active');
-    document.body.classList.remove('pm-mobile-sidebar-open');
-    if(b) b.setAttribute('aria-label','Abrir menú');
-  }
-  function toggleGraphiteSidebar(){
-    if(window.innerWidth > 1024) return;
-    const sb=$('sidebar'), bg=$('pmMobileSidebarBackdrop'), b=$('pmMobileSidebarToggle');
-    if(!sb) return;
-    const open=!sb.classList.contains('active');
-    sb.classList.toggle('active',open);
-    if(bg) bg.classList.toggle('active',open);
-    document.body.classList.toggle('pm-mobile-sidebar-open',open);
-    if(b) b.setAttribute('aria-label',open?'Cerrar menú':'Abrir menú');
-  }
-  window.toggleProManageMobileMenu=toggleGraphiteSidebar;
-  window.closeProManageMobileMenu=closeGraphiteSidebar;
 
-  function syncGraphiteLayout(force){
-    if(!document.body) return;
+  function openSidebar(){
     ensureMobileControls();
-    const dash=$('dashboardWrapper'), auth=$('authWrapper'), picker=$('companyPickerWrapper');
-    const active=shouldDashboardBeActive();
-    document.body.classList.toggle('pm-dashboard-active', active);
-    document.body.classList.toggle('pm-auth-active', !active && !!auth && !isDisplayNone(auth));
-    document.body.classList.toggle('pm-picker-active', !active && !!picker && !isDisplayNone(picker));
-    if(active){
-      if(dash) { dash.style.display='flex'; dash.style.visibility='visible'; dash.style.opacity='1'; }
-      if(auth) auth.style.display='none';
-      if(picker) picker.style.display='none';
-      hideLoadingLayers();
-      const sb=$('sidebar');
-      if(sb){ sb.style.display='flex'; if(window.innerWidth>1024) sb.classList.remove('active'); }
-      const main=document.querySelector('.main-content');
-      if(main){ main.style.display='block'; main.style.visibility='visible'; main.style.opacity='1'; }
-    }else{
-      closeGraphiteSidebar();
+    if(!dashboardIsVisible()) return;
+    const side = $('sidebar');
+    const bd = $('pmMobileSidebarBackdrop');
+    const btn = $('pmMobileSidebarToggle');
+    if(side) side.classList.add('active');
+    if(bd && MOBILE_QUERY.matches) bd.classList.add('active');
+    if(btn) btn.setAttribute('aria-expanded','true');
+    document.body.classList.add('pm-sidebar-open');
+  }
+
+  function closeSidebar(){
+    const side = $('sidebar');
+    const bd = $('pmMobileSidebarBackdrop');
+    const btn = $('pmMobileSidebarToggle');
+    if(side) side.classList.remove('active');
+    if(bd) bd.classList.remove('active');
+    if(btn) btn.setAttribute('aria-expanded','false');
+    document.body.classList.remove('pm-sidebar-open');
+  }
+
+  function toggleSidebarForce(open){
+    if(typeof open === 'boolean') return open ? openSidebar() : closeSidebar();
+    const side = $('sidebar');
+    return side && side.classList.contains('active') ? closeSidebar() : openSidebar();
+  }
+
+  window.toggleSidebar = toggleSidebarForce;
+  window.openMobileSidebar = openSidebar;
+  window.closeMobileSidebar = closeSidebar;
+
+  function closeOnMenuClick(ev){
+    const item = ev.target && ev.target.closest ? ev.target.closest('#sidebar .menu-item') : null;
+    if(item && MOBILE_QUERY.matches) setTimeout(closeSidebar, 120);
+  }
+
+  function patchThemeToggle(){
+    const oldToggle = window.toggleTheme;
+    if(typeof oldToggle === 'function' && !oldToggle.__pmBlueThemePatched){
+      const patched = function(){
+        const result = oldToggle.apply(this, arguments);
+        setTimeout(syncThemeEverywhere, 0);
+        setTimeout(syncThemeEverywhere, 80);
+        return result;
+      };
+      patched.__pmBlueThemePatched = true;
+      window.toggleTheme = patched;
     }
-    const toggle=$('pmMobileSidebarToggle');
-    if(toggle) toggle.style.display = active ? '' : 'none';
-    if(window.innerWidth>1024) closeGraphiteSidebar();
-  }
-
-  function refineVisualDetails(){
-    // Elimina texto promocional de intentos previos si quedó cacheado.
-    const bad=/ProManage\s+OS\s+Upgrade|Control total para proyectos reales|Dashboard ejecutivo, finanzas, evidencias|experiencia premium optimizada/i;
-    $$('body *').slice(0,220).forEach(el=>{
-      if(el.children.length===0 && bad.test(el.textContent||'')) el.remove();
-    });
-    // Marca sobria en login/empresa sin textos extras.
-    $$('.login-card,.company-picker-card').forEach(card=>{
-      if(!card.querySelector('.pm-premium-mark')){
-        const mark=document.createElement('div');
-        mark.className='pm-premium-mark';
-        card.insertBefore(mark,card.firstElementChild||null);
-      }
-    });
-    // Iconos discretos de menú si faltan.
-    const iconMap={dash:'⌂',intelligence:'✦',projects:'▦',team:'◇',employees:'◌',clients:'◎',finances:'Q',inventory:'□',reports:'◫'};
-    $$('.sidebar .menu-item').forEach(item=>{
-      if(!item.querySelector('.pm-menu-icon')){
-        const key=(item.id||'').replace('menu-','');
-        const ico=document.createElement('span'); ico.className='pm-menu-icon'; ico.textContent=iconMap[key]||'•';
-        item.insertBefore(ico,item.firstChild);
-      }
-    });
-    const sidebar=$('sidebar');
-    if(sidebar && !sidebar.querySelector('.pm-sidebar-foot')){
-      const foot=document.createElement('div');
-      foot.className='pm-sidebar-foot';
-      foot.innerHTML='<strong>Sistema activo</strong><span>ProManage local</span>';
-      sidebar.appendChild(foot);
+    const oldApply = window.applySavedTheme;
+    if(typeof oldApply === 'function' && !oldApply.__pmBlueThemePatched){
+      const patchedApply = function(){
+        const result = oldApply.apply(this, arguments);
+        setTimeout(syncThemeEverywhere, 0);
+        return result;
+      };
+      patchedApply.__pmBlueThemePatched = true;
+      window.applySavedTheme = patchedApply;
     }
   }
-  function addMotion(){
-    if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    $$('.stat-card,.panel,.project-card,.kanban-column,.media-item-card').slice(0,100).forEach((el,i)=>{
-      if(!el.dataset.pmGraphiteReveal){
-        el.dataset.pmGraphiteReveal='1';
-        el.style.animationDelay=Math.min(i*.018,.24)+'s';
-        el.classList.add('pm-reveal');
-      }
-    });
-  }
-  function boot(){
-    applyGraphiteTheme(localStorage.getItem('pm_theme') || localStorage.getItem('theme') || document.documentElement.getAttribute('data-theme') || 'dark');
-    refineVisualDetails();
-    syncGraphiteLayout(true);
-    addMotion();
+
+  function patchNavigationFunctions(){
+    const oldSelect = window.selectCompany;
+    if(typeof oldSelect === 'function' && !oldSelect.__pmResponsivePatched){
+      const patchedSelect = function(){
+        const result = oldSelect.apply(this, arguments);
+        setTimeout(syncLayoutState, 0);
+        setTimeout(syncLayoutState, 120);
+        return result;
+      };
+      patchedSelect.__pmResponsivePatched = true;
+      window.selectCompany = patchedSelect;
+    }
+    const oldSwitch = window.switchSection;
+    if(typeof oldSwitch === 'function' && !oldSwitch.__pmResponsivePatched){
+      const patchedSwitch = function(){
+        const result = oldSwitch.apply(this, arguments);
+        if(MOBILE_QUERY.matches) setTimeout(closeSidebar, 100);
+        setTimeout(syncLayoutState, 80);
+        return result;
+      };
+      patchedSwitch.__pmResponsivePatched = true;
+      window.switchSection = patchedSwitch;
+    }
   }
 
-  function wrapAction(name){
-    const original=window[name];
-    if(typeof original !== 'function' || original.__pmGraphiteV3) return;
-    const wrapped=function(){
-      const out=original.apply(this,arguments);
-      setTimeout(()=>raf2(boot),40);
-      setTimeout(()=>raf2(boot),180);
-      setTimeout(()=>raf2(boot),420);
-      return out;
-    };
-    wrapped.__pmGraphiteV3=true;
-    window[name]=wrapped;
+  function init(){
+    ensureMobileControls();
+    patchThemeToggle();
+    patchNavigationFunctions();
+    syncLayoutState();
+    document.addEventListener('click', closeOnMenuClick, true);
+    const dash = $('dashboardWrapper');
+    if(dash){
+      const observer = new MutationObserver(syncLayoutState);
+      observer.observe(dash, {attributes:true, attributeFilter:['style','class']});
+    }
+    const htmlObserver = new MutationObserver(syncThemeEverywhere);
+    htmlObserver.observe(document.documentElement, {attributes:true, attributeFilter:['data-theme']});
+    window.addEventListener('resize', function(){ syncLayoutState(); if(!MOBILE_QUERY.matches) closeSidebar(); }, {passive:true});
+    window.addEventListener('orientationchange', function(){ setTimeout(syncLayoutState, 180); }, {passive:true});
+    setTimeout(syncLayoutState, 80);
+    setTimeout(syncLayoutState, 500);
+    setTimeout(syncLayoutState, 1200);
   }
-  ['handleAuth','toggleAuthMode','submitCreateCompany','selectCompany','openCompanyPicker','logout','switchSection','toggleUserDropdown','toggleSmartAssistant','renderDashboard','renderProjects','renderFinances','renderInventory'].forEach(wrapAction);
 
-  ['DOMContentLoaded','load','pageshow','resize','orientationchange'].forEach(evt=>window.addEventListener(evt,()=>setTimeout(()=>raf2(boot),evt==='resize'?60:20),{passive:true}));
-  document.addEventListener('click',ev=>{
-    if(ev.target && ev.target.closest && ev.target.closest('.sidebar .menu-item') && window.innerWidth<=1024){ setTimeout(closeGraphiteSidebar,120); }
-    setTimeout(()=>raf2(boot),90);
-  },true);
-  document.addEventListener('change',()=>setTimeout(()=>raf2(boot),90),true);
-  document.addEventListener('input',()=>setTimeout(()=>raf2(boot),90),true);
-  setInterval(()=>syncGraphiteLayout(false),1200);
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot,{once:true}); else boot();
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, {once:true});
+  else init();
 })();
